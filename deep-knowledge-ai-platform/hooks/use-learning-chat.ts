@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { learningService } from "@/lib/services/learning";
 import { LearningChat } from "@/types/database";
+import { useAIChat } from "./use-ai-chat";
 
 interface UseLearningChatState {
   messages: LearningChat[];
@@ -23,24 +24,48 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
     currentNodeId: null,
   });
 
-  // Determine chat mode based on parameters
+  // Integrate with new AI chat system
+  const aiChat = useAIChat();
+
+  // Determine chat mode
   const chatMode = nodeId ? "node" : topicId ? "topic" : null;
 
-  // Fetch messages based on current mode
+  // Fetch messages when topic/node changes
+  useEffect(() => {
+    if (topicId && chatMode) {
+      setState((prev) => ({
+        ...prev,
+        currentChatMode: chatMode,
+        currentTopicId: topicId,
+        currentNodeId: nodeId || null,
+      }));
+
+      fetchMessages();
+    } else {
+      setState((prev) => ({
+        ...prev,
+        messages: [],
+        currentChatMode: null,
+        currentTopicId: null,
+        currentNodeId: null,
+      }));
+    }
+  }, [topicId, nodeId, chatMode]);
+
+  // Fetch messages from API
   const fetchMessages = useCallback(async () => {
     if (!topicId) return;
 
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
-      // Use new unified API method
-      const response = await learningService.getChats(topicId, nodeId);
+      const response = await learningService.getLearningChats(topicId, nodeId);
 
       if (response.error) {
         setState((prev) => ({
           ...prev,
           loading: false,
-          error: response.error || "Lỗi khi tải messages",
+          error: response.error || "Lỗi khi tải tin nhắn",
         }));
         return;
       }
@@ -50,80 +75,103 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
         messages: response.data || [],
         loading: false,
         error: null,
-        currentChatMode: chatMode,
-        currentTopicId: topicId,
-        currentNodeId: nodeId || null,
       }));
     } catch (error) {
       setState((prev) => ({
         ...prev,
         loading: false,
-        error: "Lỗi kết nối khi tải messages",
+        error: "Lỗi kết nối khi tải tin nhắn",
       }));
     }
-  }, [topicId, nodeId, chatMode]);
+  }, [topicId, nodeId]);
 
-  // Send message
+  // Send message using new AI chat system
   const sendMessage = useCallback(
-    async (messageData: { message: string }) => {
-      if (!topicId) return null;
+    async (params: { message: string }) => {
+      if (!topicId || !params.message.trim()) return;
 
       setState((prev) => ({ ...prev, sending: true, error: null }));
 
       try {
-        const response = await learningService.sendChatMessage({
-          topic_id: topicId,
-          node_id: chatMode === "node" ? nodeId : undefined,
-          message: messageData.message,
-          is_ai_response: false,
-          message_type: "normal",
-        });
+        // Use new AI chat system
+        const response = await aiChat.sendMessage(
+          params.message,
+          topicId,
+          nodeId
+        );
 
-        if (response.error) {
+        if (response.success && response.data) {
+          // Add both user and AI messages to state
+          const newMessages = [
+            response.data.user_message,
+            response.data.ai_message,
+          ];
+
           setState((prev) => ({
             ...prev,
-            sending: false,
-            error: response.error || "Lỗi khi gửi message",
-          }));
-          return null;
-        }
-
-        const newMessage = response.data;
-        if (newMessage) {
-          setState((prev) => ({
-            ...prev,
-            messages: [...prev.messages, newMessage],
+            messages: [...prev.messages, ...newMessages],
             sending: false,
             error: null,
           }));
-        }
 
-        return newMessage;
+          return { success: true, data: response.data };
+        } else {
+          setState((prev) => ({
+            ...prev,
+            sending: false,
+            error: response.error || "Lỗi khi gửi tin nhắn",
+          }));
+          return { error: response.error };
+        }
       } catch (error) {
         setState((prev) => ({
           ...prev,
           sending: false,
-          error: "Lỗi kết nối khi gửi message",
+          error: "Lỗi kết nối khi gửi tin nhắn",
         }));
-        return null;
+        return { error: "Lỗi kết nối" };
       }
     },
-    [topicId, nodeId, chatMode]
+    [topicId, nodeId, aiChat.sendMessage]
   );
 
-  // Create auto prompt for topic
+  // Create auto AI prompt for topic (when first opened)
   const createTopicAutoPrompt = useCallback(
     async (topicData: {
       topic_id: string;
       topic_title: string;
       topic_description: string;
     }) => {
+      // Check if already has messages
+      if (state.messages.length > 0) {
+        return { skipped: true, hasExistingChat: true };
+      }
+
       setState((prev) => ({ ...prev, sending: true, error: null }));
 
       try {
-        const response = await learningService.createTopicAutoPrompt(topicData);
+        // Use AI chat to create welcome message
+        const welcomeMessage = `Xin chào! Tôi là AI Mentor và sẽ hỗ trợ bạn học về "${topicData.topic_title}". 
+        
+${topicData.topic_description}
 
-        if (response.error) {
+Hãy bắt đầu bằng cách hỏi tôi bất kỳ điều gì về chủ đề này!`;
+
+        const response = await aiChat.sendMessage(
+          "Chào bạn, tôi muốn học về chủ đề này. Bạn có thể giới thiệu và hướng dẫn tôi không?",
+          topicData.topic_id
+        );
+
+        if (response.success && response.data) {
+          setState((prev) => ({
+            ...prev,
+            messages: [response.data.user_message, response.data.ai_message],
+            sending: false,
+            error: null,
+          }));
+
+          return { data: response.data.ai_message, skipped: false };
+        } else {
           setState((prev) => ({
             ...prev,
             sending: false,
@@ -131,28 +179,6 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
           }));
           return { error: response.error, skipped: false };
         }
-
-        // If auto-prompt was skipped (already has chat), don't add to messages
-        if (response.skipped) {
-          setState((prev) => ({
-            ...prev,
-            sending: false,
-            error: null,
-          }));
-          return { skipped: true, hasExistingChat: response.hasExistingChat };
-        }
-
-        const autoPrompt = response.data;
-        if (autoPrompt) {
-          setState((prev) => ({
-            ...prev,
-            messages: [...prev.messages, autoPrompt],
-            sending: false,
-            error: null,
-          }));
-        }
-
-        return { data: autoPrompt, skipped: false };
       } catch (error) {
         setState((prev) => ({
           ...prev,
@@ -162,139 +188,112 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
         return { error: "Lỗi kết nối", skipped: false };
       }
     },
-    []
+    [state.messages.length, aiChat.sendMessage]
   );
 
-  // Create auto prompt for node
+  // Create auto AI prompt for node using prompt_sample
   const createNodeAutoPrompt = useCallback(
     async (nodeData: {
       topic_id: string;
       node_id: string;
       node_title: string;
       node_description: string;
+      prompt_sample?: string;
     }) => {
       setState((prev) => ({ ...prev, sending: true, error: null }));
 
       try {
-        const response = await learningService.createNodeAutoPrompt(nodeData);
+        // Use prompt_sample if available, otherwise create default
+        const messageToSend =
+          nodeData.prompt_sample ||
+          `Hãy giải thích cho tôi về "${nodeData.node_title}". ${nodeData.node_description}`;
 
-        if (response.error) {
+        const response = await aiChat.sendMessage(
+          messageToSend,
+          nodeData.topic_id,
+          nodeData.node_id
+        );
+
+        if (response.success && response.data) {
+          setState((prev) => ({
+            ...prev,
+            messages: [response.data.user_message, response.data.ai_message],
+            sending: false,
+            error: null,
+          }));
+
+          return { data: response.data.ai_message, skipped: false };
+        } else {
           setState((prev) => ({
             ...prev,
             sending: false,
-            error: response.error || "Lỗi khi tạo auto prompt",
+            error: response.error || "Lỗi khi tạo node prompt",
           }));
           return { error: response.error, skipped: false };
         }
-
-        // If auto-prompt was skipped (already has chat), don't add to messages
-        if (response.skipped) {
-          setState((prev) => ({
-            ...prev,
-            sending: false,
-            error: null,
-          }));
-          return { skipped: true, hasExistingChat: response.hasExistingChat };
-        }
-
-        const autoPrompt = response.data;
-        if (autoPrompt) {
-          setState((prev) => ({
-            ...prev,
-            messages: [...prev.messages, autoPrompt],
-            sending: false,
-            error: null,
-          }));
-        }
-
-        return { data: autoPrompt, skipped: false };
       } catch (error) {
         setState((prev) => ({
           ...prev,
           sending: false,
-          error: "Lỗi kết nối khi tạo auto prompt",
+          error: "Lỗi kết nối khi tạo node prompt",
         }));
         return { error: "Lỗi kết nối", skipped: false };
       }
     },
-    []
+    [aiChat.sendMessage]
   );
 
   // Clear messages
   const clearMessages = useCallback(async () => {
-    if (!topicId) return false;
-
-    setState((prev) => ({ ...prev, loading: true, error: null }));
+    if (!topicId) return;
 
     try {
-      let response;
-
-      if (chatMode === "node" && nodeId) {
-        response = await learningService.deleteNodeChats(nodeId);
-      } else if (chatMode === "topic") {
-        response = await learningService.deleteTopicChats(topicId);
-      } else {
-        setState((prev) => ({ ...prev, loading: false }));
-        return false;
-      }
+      const response = await learningService.deleteLearningChats(
+        topicId,
+        nodeId
+      );
 
       if (response.error) {
         setState((prev) => ({
           ...prev,
-          loading: false,
-          error: response.error || "Lỗi khi xóa messages",
+          error: response.error || "Lỗi khi xóa tin nhắn",
         }));
-        return false;
+        return;
       }
 
       setState((prev) => ({
         ...prev,
         messages: [],
-        loading: false,
         error: null,
       }));
 
-      return true;
+      // Reset AI chat session
+      aiChat.resetSession();
     } catch (error) {
       setState((prev) => ({
         ...prev,
-        loading: false,
-        error: "Lỗi kết nối khi xóa messages",
+        error: "Lỗi kết nối khi xóa tin nhắn",
       }));
-      return false;
     }
-  }, [topicId, nodeId, chatMode]);
+  }, [topicId, nodeId, aiChat.resetSession]);
 
   // Clear error
   const clearError = useCallback(() => {
     setState((prev) => ({ ...prev, error: null }));
   }, []);
 
-  // Load messages when parameters change
-  useEffect(() => {
-    if (topicId && chatMode) {
-      fetchMessages();
-    } else {
-      // Reset state when no valid parameters
-      setState((prev) => ({
-        ...prev,
-        messages: [],
-        currentChatMode: null,
-        currentTopicId: null,
-        currentNodeId: null,
-      }));
-    }
-  }, [fetchMessages, topicId, nodeId, chatMode]);
-
   return {
     // State
     messages: state.messages,
-    loading: state.loading,
+    loading: state.loading || aiChat.isLoading,
     sending: state.sending,
-    error: state.error,
+    error: state.error || aiChat.error,
     currentChatMode: state.currentChatMode,
     currentTopicId: state.currentTopicId,
     currentNodeId: state.currentNodeId,
+
+    // AI Chat info
+    sessionId: aiChat.sessionId,
 
     // Actions
     sendMessage,

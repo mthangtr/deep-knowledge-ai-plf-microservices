@@ -133,6 +133,8 @@ export interface MindMapNodeData {
   id: string;
   title: string;
   description: string;
+  prompt_sample?: string; // Prompt mẫu khi user click vào node
+  is_chat_enabled: boolean; // Có cho phép chat với node này không
   level: number;
   requires: string[]; // các node phải học trước
   next: string[]; // các node gợi ý học tiếp

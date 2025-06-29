@@ -324,6 +324,65 @@ class LearningService {
     }
   }
 
+  // Alias method for compatibility with useLearningChat
+  async getLearningChats(
+    topicId: string,
+    nodeId?: string
+  ): Promise<ApiResponse<LearningChat[]>> {
+    return this.getChats(topicId, nodeId);
+  }
+
+  // New AI chat method using the updated endpoint
+  async sendAIMessage(params: {
+    topic_id: string;
+    node_id?: string;
+    message: string;
+    session_id?: string;
+  }): Promise<
+    ApiResponse<{
+      user_message: LearningChat;
+      ai_message: LearningChat;
+      session_id: string;
+      context_info: any;
+      session_stats: any;
+      model_used: string;
+      processing_time: number;
+    }>
+  > {
+    try {
+      const response = await fetch(API_ENDPOINTS.chat.ai, {
+        method: "POST",
+        headers: await this.getHeaders(),
+        body: JSON.stringify(params),
+      });
+      return await response.json();
+    } catch (error) {
+      return { error: "Lỗi kết nối mạng" };
+    }
+  }
+
+  // Delete chats method with topic_id + optional node_id
+  async deleteLearningChats(
+    topicId: string,
+    nodeId?: string
+  ): Promise<ApiResponse<{ success: boolean }>> {
+    try {
+      const params = new URLSearchParams();
+      params.append("topic_id", topicId);
+      if (nodeId) {
+        params.append("node_id", nodeId);
+      }
+
+      const response = await fetch(`${API_ENDPOINTS.chat.messages}?${params}`, {
+        method: "DELETE",
+        headers: await this.getHeaders(),
+      });
+      return await response.json();
+    } catch (error) {
+      return { error: "Lỗi kết nối mạng" };
+    }
+  }
+
   async sendChatMessage(message: {
     topic_id: string;
     node_id?: string; // Optional - null for topic-level chat

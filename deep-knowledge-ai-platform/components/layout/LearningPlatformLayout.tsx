@@ -151,6 +151,8 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
         id: node.id,
         title: node.title,
         description: node.description,
+        prompt_sample: node.prompt_sample || undefined,
+        is_chat_enabled: node.is_chat_enabled,
         level: node.level,
         requires: node.requires,
         next: node.next
@@ -233,24 +235,29 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
             setSelectedNodeForChat(dbNode); // Switch to node-level chat
             setShowMindMap(false); // Close mind map modal
 
-            // Tự động tạo auto prompt cho node này chỉ khi chưa có messages
+            // Tự động gửi prompt_sample nếu node có chat enabled
             setTimeout(async () => {
                 try {
-                    const response = await createNodeAutoPrompt({
-                        topic_id: selectedTopic.id,
-                        node_id: node.id,
-                        node_title: node.title,
-                        node_description: node.description,
-                    });
+                    if (dbNode.is_chat_enabled) {
+                        const response = await createNodeAutoPrompt({
+                            topic_id: selectedTopic.id,
+                            node_id: node.id,
+                            node_title: node.title,
+                            node_description: node.description,
+                            prompt_sample: dbNode.prompt_sample, // Use prompt_sample from node
+                        });
 
-                    // Log response để debug
-                    if (response?.skipped) {
-                        console.log('Node auto-prompt skipped - already has chat history');
-                    } else if (response) {
-                        console.log('Node auto-prompt created successfully');
+                        // Log response để debug
+                        if (response?.skipped) {
+                            console.log('Node prompt skipped - already has chat history');
+                        } else if (response) {
+                            console.log('Node prompt sent successfully:', dbNode.prompt_sample);
+                        }
+                    } else {
+                        console.log('Node chat disabled, showing read-only view');
                     }
                 } catch (error) {
-                    console.error('Lỗi tạo node auto prompt:', error);
+                    console.error('Lỗi gửi node prompt:', error);
                 }
             }, 100);
         }
