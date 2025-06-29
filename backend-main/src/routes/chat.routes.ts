@@ -370,4 +370,300 @@ Hãy sẵn sàng cho một cuộc thảo luận thú vị và bổ ích!`;
   }
 });
 
+// POST /api/learning/chat/ai - Chat with AI using langchain-python service
+router.post("/ai", authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user!.id;
+    const { topic_id, node_id, message, session_id } = req.body;
+
+    // Validate input
+    if (!topic_id || !message) {
+      return res.status(400).json({
+        error: "Missing topic_id or message",
+      });
+    }
+
+    // Verify topic ownership
+    const hasAccess = await validateTopicOwnership(topic_id, userId);
+    if (!hasAccess) {
+      return res.status(403).json({
+        error: "Bạn không có quyền truy cập chủ đề này",
+      });
+    }
+
+    // If node_id provided, verify it belongs to topic
+    if (node_id) {
+      const { data: node, error: nodeError } = await supabase
+        .from("tree_nodes")
+        .select("topic_id")
+        .eq("id", node_id)
+        .eq("topic_id", topic_id)
+        .single();
+
+      if (nodeError || !node) {
+        return res.status(404).json({
+          error: "Node not found or doesn't belong to topic",
+        });
+      }
+    }
+
+    // Save user message to database first
+    const userMessage = {
+      topic_id,
+      node_id: node_id || null,
+      user_id: userId,
+      message: message.trim(),
+      is_ai_response: false,
+      message_type: "normal",
+      session_id: session_id || null,
+    };
+
+    const { data: savedUserMessage, error: userMessageError } = await supabase
+      .from("learning_chats")
+      .insert([userMessage])
+      .select()
+      .single();
+
+    if (userMessageError) {
+      console.error("Error saving user message:", userMessageError);
+      return res.status(500).json({
+        error: "Cannot save user message",
+        details: userMessageError.message,
+      });
+    }
+
+    try {
+      // Call langchain-python service for AI response
+      const langchainUrl =
+        process.env.LANGCHAIN_SERVICE_URL || "http://langchain-python:5000";
+
+      const aiResponse = await fetch(`${langchainUrl}/smart-chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          session_id: session_id,
+          user_id: userId,
+          message: message,
+          topic_id: topic_id,
+          node_id: node_id || null,
+          model: "google/gemini-2.5-flash", // Default model
+        }),
+      });
+
+      if (!aiResponse.ok) {
+        throw new Error(`LangChain service error: ${aiResponse.status}`);
+      }
+
+      const aiData = await aiResponse.json();
+
+      // Save AI response to database
+      const aiMessage = {
+        topic_id,
+        node_id: node_id || null,
+        user_id: userId,
+        message: aiData.response,
+        is_ai_response: true,
+        message_type: "normal",
+        session_id: aiData.session_id || session_id,
+        model_used: aiData.model_used,
+        tokens_used: aiData.context_info?.estimated_tokens || 0,
+      };
+
+      const { data: savedAiMessage, error: aiMessageError } = await supabase
+        .from("learning_chats")
+        .insert([aiMessage])
+        .select()
+        .single();
+
+      if (aiMessageError) {
+        console.error("Error saving AI message:", aiMessageError);
+        // Continue anyway - AI response was generated
+      }
+
+      // Return both messages and session info
+      return res.json({
+        success: true,
+        data: {
+          user_message: savedUserMessage,
+          ai_message: savedAiMessage || { message: aiData.response },
+          session_id: aiData.session_id,
+          context_info: aiData.context_info,
+          session_stats: aiData.session_stats,
+          model_used: aiData.model_used,
+          processing_time: aiData.processing_time,
+        },
+      });
+    } catch (aiError) {
+      console.error("LangChain service error:", aiError);
+
+      // Fallback: Return a default AI response if service is down
+      const fallbackMessage = {
+        topic_id,
+        node_id: node_id || null,
+        user_id: userId,
+        message: "Xin lỗi, tôi đang gặp sự cố kỹ thuật. Vui lòng thử lại sau.",
+        is_ai_response: true,
+        message_type: "normal",
+      };
+
+      const { data: fallbackData } = await supabase
+        .from("learning_chats")
+        .insert([fallbackMessage])
+        .select()
+        .single();
+
+      return res.status(503).json({
+        error: "AI service temporarily unavailable",
+        data: {
+          user_message: savedUserMessage,
+          ai_message: fallbackData,
+        },
+      });
+    }
+  } catch (error) {
+    console.error("Server error:", error);
+    return res.status(500).json({
+      error: "Internal server error",
+    });
+  }
+});
+
+// POST /api/learning/chat/session - Get or create chat session
+router.post("/session", authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user!.id;
+    const { topic_id, node_id, title } = req.body;
+
+    if (!topic_id) {
+      return res.status(400).json({
+        error: "Missing topic_id",
+      });
+    }
+
+    // Verify topic ownership
+    const hasAccess = await validateTopicOwnership(topic_id, userId);
+    if (!hasAccess) {
+      return res.status(403).json({
+        error: "Bạn không có quyền truy cập chủ đề này",
+      });
+    }
+
+    // Check for existing active session
+    let query = supabase
+      .from("chat_sessions")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("topic_id", topic_id)
+      .eq("is_active", true)
+      .order("last_activity", { ascending: false })
+      .limit(1);
+
+    if (node_id) {
+      query = query.eq("node_id", node_id);
+    } else {
+      query = query.is("node_id", null);
+    }
+
+    const { data: existingSession, error: checkError } = await query;
+
+    if (checkError) {
+      console.error("Error checking existing session:", checkError);
+      return res.status(500).json({
+        error: "Cannot check existing session",
+        details: checkError.message,
+      });
+    }
+
+    // Return existing session if found
+    if (existingSession && existingSession.length > 0) {
+      return res.json({
+        data: existingSession[0],
+        isNew: false,
+      });
+    }
+
+    // Create new session
+    const newSession = {
+      user_id: userId,
+      topic_id,
+      node_id: node_id || null,
+      title: title || `Chat - ${new Date().toLocaleString()}`,
+    };
+
+    const { data: createdSession, error: createError } = await supabase
+      .from("chat_sessions")
+      .insert([newSession])
+      .select()
+      .single();
+
+    if (createError) {
+      console.error("Error creating session:", createError);
+      return res.status(500).json({
+        error: "Cannot create chat session",
+        details: createError.message,
+      });
+    }
+
+    return res.status(201).json({
+      data: createdSession,
+      isNew: true,
+    });
+  } catch (error) {
+    console.error("Server error:", error);
+    return res.status(500).json({
+      error: "Internal server error",
+    });
+  }
+});
+
+// GET /api/learning/chat/sessions - Get user's chat sessions
+router.get("/sessions", authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user!.id;
+    const { topic_id, active_only = "true" } = req.query;
+
+    let query = supabase
+      .from("chat_sessions")
+      .select(
+        `
+        *,
+        learning_topics!inner(title),
+        tree_nodes(title)
+      `
+      )
+      .eq("user_id", userId)
+      .order("last_activity", { ascending: false });
+
+    if (topic_id) {
+      query = query.eq("topic_id", topic_id);
+    }
+
+    if (active_only === "true") {
+      query = query.eq("is_active", true);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("Error fetching sessions:", error);
+      return res.status(500).json({
+        error: "Cannot fetch chat sessions",
+        details: error.message,
+      });
+    }
+
+    return res.json({
+      data: data || [],
+      count: data?.length || 0,
+    });
+  } catch (error) {
+    console.error("Server error:", error);
+    return res.status(500).json({
+      error: "Internal server error",
+    });
+  }
+});
+
 export default router;

@@ -5,17 +5,30 @@ from typing import List, Optional, Dict, Any
 import os
 from dotenv import load_dotenv
 from loguru import logger
+from contextlib import asynccontextmanager
 
 from app.models.llm_config import LLMConfig
 from app.agents.multi_agent import MultiAgentOrchestrator
-from app.agents.context_manager import ContextManager
+from app.agents.db_context_manager import DatabaseContextManager
 
 load_dotenv()
+
+# Context manager for app lifespan
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Starting up langchain-python service...")
+    await db_context_manager.init_db()
+    yield
+    # Shutdown
+    logger.info("Shutting down langchain-python service...")
+    await db_context_manager.close()
 
 app = FastAPI(
     title="LangChain Python Service",
     description="Multi-agent LLM service với LangChain và OpenRouter",
-    version="1.0.0"
+    version="2.0.0",
+    lifespan=lifespan
 )
 
 # CORS
@@ -27,9 +40,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize orchestrator and context manager
+# Initialize orchestrator and database context manager
 orchestrator = MultiAgentOrchestrator()
-context_manager = ContextManager()
+db_context_manager = DatabaseContextManager()
 
 # Pydantic models
 class ChatMessage(BaseModel):
@@ -49,9 +62,11 @@ class ChatResponse(BaseModel):
     agent_info: Optional[Dict[str, Any]] = None
 
 class SmartChatRequest(BaseModel):
-    session_id: str
+    session_id: Optional[str] = None
     user_id: str
     message: str
+    topic_id: Optional[str] = None
+    node_id: Optional[str] = None
     model: Optional[str] = "google/gemini-2.0-flash-lite-001"
 
 class SmartChatResponse(BaseModel):
@@ -60,6 +75,7 @@ class SmartChatResponse(BaseModel):
     processing_time: float
     context_info: Dict[str, Any]
     session_stats: Dict[str, Any]
+    session_id: str
 
 class MultiAgentRequest(BaseModel):
     topic: str
@@ -78,7 +94,8 @@ async def root():
     return {
         "service": "LangChain Python Service",
         "status": "running",
-        "version": "1.0.0"
+        "version": "2.0.0",
+        "database": "PostgreSQL with pgvector"
     }
 
 @app.get("/health")
@@ -86,6 +103,8 @@ async def health():
     return {
         "status": "healthy",
         "openrouter_configured": bool(os.getenv("OPENROUTER_API_KEY")),
+        "openai_configured": bool(os.getenv("OPENAI_API_KEY")),
+        "database_configured": bool(os.getenv("DATABASE_URL")),
         "models_available": LLMConfig.get_available_models()
     }
 
@@ -116,25 +135,37 @@ async def chat_single(request: ChatRequest):
 
 @app.post("/smart-chat", response_model=SmartChatResponse)
 async def smart_chat(request: SmartChatRequest):
-    """Smart chat với context management"""
+    """Smart chat với persistent context management (like ChatGPT)"""
     import time
     start_time = time.time()
     
     try:
-        logger.info(f"Smart chat - Session: {request.session_id}, User: {request.user_id}")
+        logger.info(f"Smart chat - User: {request.user_id}, Session: {request.session_id}")
         logger.info(f"Message: {request.message[:100]}...")
         
+        # Get or create session
+        if not request.session_id:
+            session_id = await db_context_manager.get_or_create_session(
+                user_id=request.user_id,
+                topic_id=request.topic_id,
+                node_id=request.node_id,
+                title=f"Chat - {request.message[:50]}..."
+            )
+            logger.info(f"Created new session: {session_id}")
+        else:
+            session_id = request.session_id
+        
         # Add user message to context
-        context_manager.add_message(
-            session_id=request.session_id,
+        await db_context_manager.add_message(
+            session_id=session_id,
             user_id=request.user_id,
             role="user",
             content=request.message
         )
         
         # Get smart context for this message
-        context_package = await context_manager.get_context_for_message(
-            session_id=request.session_id,
+        context_package = await db_context_manager.get_context_for_message(
+            session_id=session_id,
             user_id=request.user_id,
             message=request.message
         )
@@ -142,18 +173,18 @@ async def smart_chat(request: SmartChatRequest):
         # Build context for LLM
         llm_context = []
         
-        # Add recent messages
-        for msg in context_package.recent:
-            llm_context.append({
-                "role": msg.role,
-                "content": msg.content
-            })
-        
         # Add summary if available
         if context_package.summary:
             llm_context.insert(0, {
                 "role": "system",
                 "content": f"Tóm tắt cuộc hội thoại trước: {context_package.summary}"
+            })
+        
+        # Add recent messages
+        for msg in context_package.recent:
+            llm_context.append({
+                "role": msg.role,
+                "content": msg.content
             })
         
         # Add relevant historical messages
@@ -171,15 +202,17 @@ async def smart_chat(request: SmartChatRequest):
         )
         
         # Add AI response to context
-        context_manager.add_message(
-            session_id=request.session_id,
+        await db_context_manager.add_message(
+            session_id=session_id,
             user_id=request.user_id,
             role="assistant", 
-            content=result["response"]
+            content=result["response"],
+            model_used=result["model_used"],
+            tokens_used=context_package.total_tokens_estimate
         )
         
         # Get session stats
-        session_stats = context_manager.get_session_stats(request.session_id)
+        session_stats = await db_context_manager.get_session_stats(session_id)
         
         processing_time = time.time() - start_time
         
@@ -194,7 +227,8 @@ async def smart_chat(request: SmartChatRequest):
                 "has_summary": context_package.summary is not None,
                 "estimated_tokens": context_package.total_tokens_estimate
             },
-            session_stats=session_stats
+            session_stats=session_stats,
+            session_id=session_id
         )
         
     except Exception as e:
@@ -237,8 +271,46 @@ async def get_models():
 @app.get("/session/{session_id}/stats")
 async def get_session_stats(session_id: str):
     """Get session statistics"""
-    stats = context_manager.get_session_stats(session_id)
+    stats = await db_context_manager.get_session_stats(session_id)
     return stats
+
+@app.get("/user/{user_id}/sessions")
+async def get_user_sessions(user_id: str, active_only: bool = True):
+    """Get user's chat sessions"""
+    try:
+        if not db_context_manager.db_pool:
+            raise HTTPException(status_code=503, detail="Database not initialized")
+            
+        async with db_context_manager.db_pool.acquire() as conn:
+            query = """
+                SELECT 
+                    cs.id,
+                    cs.title,
+                    cs.message_count,
+                    cs.last_activity,
+                    cs.created_at,
+                    lt.title as topic_title,
+                    tn.title as node_title
+                FROM chat_sessions cs
+                LEFT JOIN learning_topics lt ON cs.topic_id = lt.id
+                LEFT JOIN tree_nodes tn ON cs.node_id = tn.id
+                WHERE cs.user_id = $1
+            """
+            
+            if active_only:
+                query += " AND cs.is_active = true"
+            
+            query += " ORDER BY cs.last_activity DESC"
+            
+            rows = await conn.fetch(query, user_id)
+            
+            return {
+                "sessions": [dict(row) for row in rows],
+                "total": len(rows)
+            }
+    except Exception as e:
+        logger.error(f"Error getting user sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
