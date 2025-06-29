@@ -1,0 +1,139 @@
+---
+description: Developer experience optimizations and tooling setup
+globs: ["**/*.ts", "**/*.tsx", "**/*.json"]
+alwaysApply: true
+---
+
+# Developer Experience
+
+## Development Environment
+- **Fast Refresh**: Hot reload for React components
+- **TypeScript Incremental Builds**:
+  ```json
+  {
+    "compilerOptions": {
+      "incremental": true,
+      "tsBuildInfoFile": ".tsbuildinfo"
+    }
+  }
+  ```
+- **Turbopack** for faster builds (experimental)
+
+## ESLint Performance
+- Optimize ESLint for speed:
+  ```json
+  {
+    "parserOptions": {
+      "project": "./tsconfig.json",
+      "tsconfigRootDir": ".",
+      "ecmaVersion": "latest"
+    },
+    "settings": {
+      "react": { "version": "detect" }
+    },
+    "ignorePatterns": [".next", "node_modules"]
+  }
+  ```
+- Use `.eslintignore` for build artifacts
+- Cache ESLint results
+
+## Git Hooks
+- **Husky** + **lint-staged**:
+  ```json
+  {
+    "lint-staged": {
+      "*.{ts,tsx}": [
+        "eslint --fix",
+        "prettier --write"
+      ],
+      "*.{json,md}": "prettier --write"
+    }
+  }
+  ```
+- Prevent commits với TypeScript errors
+- Auto-fix formatting issues
+
+## Commit Standards
+- **Conventional Commits**:
+  ```
+  feat(auth): add OAuth provider
+  fix(ui): resolve button alignment issue
+  docs(readme): update installation steps
+  perf(api): optimize database queries
+  ```
+- Use commitizen for guided commits
+- Auto-generate CHANGELOG.md
+
+## Development Tools
+- **Storybook** for component development:
+  ```tsx
+  export default {
+    title: 'UI/Button',
+    component: Button,
+    argTypes: {
+      variant: {
+        control: { type: 'select' },
+        options: ['primary', 'secondary', 'ghost']
+      }
+    }
+  }
+  ```
+- **React DevTools** profiler
+- **Redux DevTools** (if using Redux)
+
+## Code Intelligence
+- JSDoc for better IntelliSense:
+  ```tsx
+  /**
+   * Formats a date string to user-friendly format
+   * @param date - ISO date string
+   * @param locale - User's locale (default: 'en-US')
+   * @returns Formatted date string
+   */
+  export const formatDate = (date: string, locale = 'en-US'): string => {
+    return new Intl.DateTimeFormat(locale).format(new Date(date))
+  }
+  ```
+
+## Environment Management
+- `.env.example` với all required vars
+- Type-safe environment variables:
+  ```ts
+  // env.ts
+  import { z } from 'zod'
+  
+  const envSchema = z.object({
+    DATABASE_URL: z.string().url(),
+    NEXTAUTH_SECRET: z.string().min(32),
+    API_KEY: z.string()
+  })
+  
+  export const env = envSchema.parse(process.env)
+  ```
+
+## Error Messages
+- Developer-friendly error messages:
+  ```tsx
+  if (!apiKey) {
+    throw new Error(
+      `Missing API_KEY environment variable.
+      Please add it to your .env.local file:
+      API_KEY=your_key_here
+      
+      See docs: https://docs.example.com/setup`
+    )
+  }
+  ```
+
+## Quick Start
+- One-command setup:
+  ```json
+  {
+    "scripts": {
+      "setup": "npm install && npm run env:copy && npm run db:setup",
+      "env:copy": "cp .env.example .env.local",
+      "db:setup": "prisma generate && prisma db push"
+    }
+  }
+  ```
+

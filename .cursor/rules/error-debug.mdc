@@ -1,0 +1,75 @@
+---
+description: Error handling và debug tốt
+globs: ["**/*.ts", "**/*.tsx"]
+alwaysApply: true
+---
+# Error Handling & Debug Strategies
+
+## Error Boundaries
+- Wrap error-prone logic in `try-catch` blocks
+- Implement error boundaries at layout level:
+  ```tsx
+  // app/error.tsx
+  export default function Error({
+    error,
+    reset,
+  }: {
+    error: Error & { digest?: string }
+    reset: () => void
+  }) {
+    return <ErrorFallback error={error} onReset={reset} />
+  }
+  ```
+
+## Debug Components
+- Create `<DebugBox />` for development:
+  ```tsx
+  export const DebugBox = ({ data }: { data: any }) => {
+    if (process.env.NODE_ENV === 'production') return null
+    
+    return (
+      <pre className="p-4 bg-gray-100 dark:bg-gray-800 rounded overflow-auto">
+        {JSON.stringify(data, null, 2)}
+      </pre>
+    )
+  }
+  ```
+- Show props, state, error stack in dev mode
+- Add `cursor-help` on confusing errors
+
+## Logging Strategy
+- Centralized logger (`lib/logger.ts`):
+  ```ts
+  const logger = {
+    error: (msg: string, error?: any) => {
+      console.error(msg, error)
+      if (process.env.NODE_ENV === 'production') {
+        Sentry.captureException(error)
+      }
+    },
+    warn: (msg: string, data?: any) => { /* ... */ },
+    info: (msg: string, data?: any) => { /* ... */ },
+  }
+  ```
+- Log với correlation IDs cho request tracking
+- Structured logging format (JSON in production)
+
+## Common Error Patterns
+- **Missing `'use client'`**: Show helpful message
+  ```tsx
+  ⚠️ Component uses hooks but missing 'use client' directive
+  ```
+- **Hydration mismatches**: Log server vs client differences
+- **Async errors**: Always handle `.catch()` or use try/await
+
+## Development Tools
+- React DevTools integration
+- Custom devtools panel for app state
+- Performance profiling markers
+- Network request interceptors
+
+## Error Recovery
+- Implement retry logic với exponential backoff
+- Fallback UI states cho mọi async operation
+- Cache valid states để rollback khi error
+- User-friendly error messages (no technical jargon)

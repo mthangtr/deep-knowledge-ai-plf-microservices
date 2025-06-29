@@ -1,0 +1,133 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Workflow Automation
+
+## Code Generation
+- Use Cursor AI features effectively:
+  - Tab completion for boilerplate
+  - Generate tests from implementation
+  - Auto-fix linting errors
+  - Generate types from API responses
+
+## Snippets & Templates
+- Component template:
+  ```tsx
+  // comp.tsx snippet
+  interface ${1:Component}Props {
+    ${2:// props}
+  }
+
+  export const ${1:Component}: React.FC<${1:Component}Props> = (props) => {
+    return (
+      <div className="${3:}">
+        ${0}
+      </div>
+    )
+  }
+  ```
+
+- Hook template:
+  ```tsx
+  // hook.ts snippet
+  export const use${1:Hook} = (${2:params}) => {
+    const [state, setState] = useState(${3:initial})
+    
+    useEffect(() => {
+      ${4:// effect}
+    }, [${5:deps}])
+    
+    return { state }
+  }
+  ```
+
+## Development Scripts
+- Package.json scripts:
+  ```json
+  {
+    "scripts": {
+      "dev": "next dev",
+      "build": "next build",
+      "start": "next start",
+      "lint": "next lint",
+      "lint:fix": "next lint --fix",
+      "type-check": "tsc --noEmit",
+      "format": "prettier --write .",
+      "test": "jest",
+      "test:watch": "jest --watch",
+      "analyze": "ANALYZE=true next build",
+      "prepare": "husky install"
+    }
+  }
+  ```
+
+## VS Code Settings
+- Recommended workspace settings:
+  ```json
+  {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": true,
+      "source.organizeImports": true
+    },
+    "typescript.preferences.importModuleSpecifier": "relative",
+    "tailwindCSS.experimental.classRegex": [
+      ["cn\\(([^)]*)\\)", "[\"'`](mdc:[^/"'`]*).*?[\"'`]"]
+    ]
+  }
+  ```
+
+## Git Workflow
+- Branch naming: `feature/`, `fix/`, `chore/`
+- Commit conventions:
+  - `feat:` new features
+  - `fix:` bug fixes
+  - `docs:` documentation
+  - `style:` formatting
+  - `refactor:` code restructuring
+  - `test:` adding tests
+  - `chore:` maintenance
+
+## Debugging Tools
+- Debug configurations cho VS Code:
+  ```json
+  {
+    "type": "node",
+    "request": "launch",
+    "name": "Next.js Debug",
+    "skipFiles": ["<node_internals>/**"],
+    "program": "${workspaceFolder}/node_modules/.bin/next",
+    "args": ["dev"],
+    "env": {
+      "NODE_OPTIONS": "--inspect"
+    }
+  }
+  ```
+
+## Performance Monitoring
+- Local performance profiling:
+  ```tsx
+  // utils/performance.ts
+  export const measurePerformance = (name: string) => {
+    if (process.env.NODE_ENV === 'development') {
+      performance.mark(`${name}-start`)
+      
+      return () => {
+        performance.mark(`${name}-end`)
+        performance.measure(name, `${name}-start`, `${name}-end`)
+        const measure = performance.getEntriesByName(name)[0]
+        console.log(`${name}: ${measure.duration.toFixed(2)}ms`)
+      }
+    }
+    return () => {}
+  }
+  ```
+
+## Documentation Generation
+- Auto-generate API docs from comments
+- Component documentation với Storybook
+- Maintain CHANGELOG.md automatically
+- README templates for new features
+

@@ -1,0 +1,48 @@
+---
+description: Component và coding style
+globs: ["**/*.tsx"]
+alwaysApply: true
+---
+# Component Style Rules
+
+## Component Architecture
+- **Stateless by default**: Use `React.FC<Props>` for all components
+- Extract business logic into:
+  - `lib/` - for utilities and helpers
+  - `hooks/` - for custom React hooks
+  - `utils/` - for pure functions
+- **NO logic inside UI layer** — components should only handle presentation
+
+## Styling Best Practices
+- Use `className={cn(...)}` to compose Tailwind classes dynamically
+- Conditionally apply styles using `cn()` instead of ternaries in JSX:
+  ```tsx
+  // ✅ Good
+  <div className={cn("base-class", isActive && "active-class")} />
+  
+  // ❌ Bad
+  <div className={isActive ? "base-class active-class" : "base-class"} />
+  ```
+
+## Component Patterns
+- Always support `props.children` for composition
+- Use `forwardRef` when component wraps native elements
+- **150 LOC limit** — split into smaller subcomponents if exceeded
+- Extract shared variants into reusable components
+
+## Accessibility & UX
+- Cursor states:
+  - `cursor-pointer` only for clickable elements
+  - `cursor-not-allowed` for disabled states
+  - `cursor-wait` for loading states
+  - `cursor-help` for tooltips/help
+- Required accessibility props:
+  - `aria-label` for icon-only buttons
+  - `aria-disabled` instead of just visual disabled
+  - `role` when semantic HTML isn't enough
+  - Keyboard navigation support (Tab, Enter, Escape)
+
+## Performance
+- Memoize expensive computations with `useMemo`
+- Use `React.memo` for components that re-render often with same props
+- Lazy load heavy components with `dynamic(() => import(...))`

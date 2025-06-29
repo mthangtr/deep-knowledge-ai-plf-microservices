@@ -1,0 +1,78 @@
+---
+description: Cấu trúc dự án NextJS 15 chuẩn
+globs: ["**/*.tsx", "**/*.ts"]
+alwaysApply: true
+---
+# Project Structure
+
+## Next.js 15 App Router
+- **Use App Router exclusively** — NO Pages Router
+- Required files:
+  - `page.tsx` - route pages
+  - `layout.tsx` - nested layouts
+  - `error.tsx` - error boundaries
+  - `loading.tsx` - loading states
+  - `route.ts` - API endpoints
+
+## Naming Conventions
+- **Folders**: `kebab-case/`
+- **Components**: `PascalCase.tsx`
+- **Utilities**: `camelCase.ts`
+- **Constants**: `UPPER_SNAKE_CASE.ts`
+- **Types**: `PascalCase.types.ts`
+
+## Directory Structure
+```
+app/                    # Next.js App Router
+├── (auth)/            # Route groups
+├── api/               # API routes
+├── [dynamic]/         # Dynamic routes
+└── globals.css        # Global styles
+
+components/            # Reusable UI components
+├── ui/               # Base UI components (Button, Input, etc)
+├── forms/            # Form components
+├── layout/           # Layout components
+└── sections/         # Page sections
+
+lib/                   # Business logic
+├── services/         # API services
+├── utils/            # Utility functions
+└── validations/      # Zod schemas
+
+hooks/                 # Custom React hooks
+types/                 # TypeScript types/interfaces
+public/                # Static assets
+prisma/                # Database schema (or drizzle/)
+```
+
+## Client/Server Guidelines
+- **`'use client'` only when needed**:
+  - Component uses hooks (useState, useEffect)
+  - Has event handlers (onClick, onChange)
+  - Uses browser APIs
+- Server Components by default for:
+  - Data fetching
+  - Async components
+  - Static content
+
+## Code Organization
+- **Colocation**: Keep related files together
+- **Feature folders** for complex features:
+  ```
+  features/
+  └── auth/
+      ├── components/
+      ├── hooks/
+      ├── lib/
+      └── types/
+  ```
+- Separate types into `types/` for reuse
+- Share Zod schemas between client/server
+
+## Performance Patterns
+- Wrap client components in `<Suspense>`
+- Use Server Actions for mutations
+- For client mutations: React Query or SWR
+- Parallel data fetching with Promise.all
+- Static generation where possible

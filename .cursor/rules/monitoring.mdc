@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+- Health check endpoints
+- Metrics với Prometheus
+- Logging với correlation IDs
+- Error tracking với Sentry
+- Performance monitoring
+- Database query monitoring
+

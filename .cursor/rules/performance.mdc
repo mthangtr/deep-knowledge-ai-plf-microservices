@@ -1,0 +1,102 @@
+---
+description: Performance & tối ưu hóa
+globs: ["**/*.tsx"]
+alwaysApply: true
+---
+# Performance Optimization
+
+## Image Optimization
+- **Always use Next.js `<Image />`**:
+  ```tsx
+  import Image from 'next/image'
+  
+  <Image
+    src="/hero.jpg"
+    alt="Hero image"
+    width={1200}
+    height={600}
+    priority // for above-the-fold images
+    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+    placeholder="blur"
+    blurDataURL={shimmer}
+  />
+  ```
+- Use WebP/AVIF formats
+- Implement responsive images với `sizes`
+- Lazy load below-the-fold images
+
+## Code Splitting
+- Dynamic imports cho heavy components:
+  ```tsx
+  const HeavyChart = dynamic(
+    () => import('@/components/HeavyChart'),
+    { 
+      loading: () => <Skeleton />,
+      ssr: false // for client-only components
+    }
+  )
+  ```
+- Route-based code splitting (automatic in App Router)
+- Component-level splitting for modals/tabs
+
+## React Optimization
+- **Avoid unnecessary `useEffect`**:
+  ```tsx
+  // ❌ Bad
+  useEffect(() => {
+    setFullName(`${firstName} ${lastName}`)
+  }, [firstName, lastName])
+  
+  // ✅ Good
+  const fullName = `${firstName} ${lastName}`
+  ```
+- Memoization strategies:
+  - `useMemo` for expensive calculations
+  - `useCallback` for stable function references
+  - `React.memo` for pure components
+
+## Bundle Size
+- Tree-shake imports:
+  ```tsx
+  // ❌ Bad
+  import _ from 'lodash'
+  
+  // ✅ Good
+  import debounce from 'lodash/debounce'
+  ```
+- Analyze bundle với `@next/bundle-analyzer`
+- Remove unused dependencies
+- Use lighter alternatives (date-fns vs moment)
+
+## Data Fetching
+- Parallel requests với `Promise.all`:
+  ```tsx
+  const [users, posts, comments] = await Promise.all([
+    fetchUsers(),
+    fetchPosts(),
+    fetchComments()
+  ])
+  ```
+- Implement proper caching strategies
+- Use `revalidate` for ISR
+- Stream large responses
+
+## Core Web Vitals
+- **LCP** (Largest Contentful Paint):
+  - Preload critical resources
+  - Optimize server response time
+  - Use CDN for static assets
+- **FID** (First Input Delay):
+  - Minimize JavaScript execution
+  - Break up long tasks
+- **CLS** (Cumulative Layout Shift):
+  - Set dimensions for images/videos
+  - Avoid dynamic content injection
+  - Use CSS transforms for animations
+
+## Production Optimizations
+- Remove `console.log` statements
+- Enable React strict mode in development only
+- Use production builds for testing
+- Implement service workers for offline support
+- Enable gzip/brotli compression

@@ -1,0 +1,78 @@
+---
+description: UI/UX rules for Next.js projects
+globs: ["**/*.tsx"]
+alwaysApply: true
+---
+---
+description: UI/UX rules for NextJS projects
+alwaysApply: true
+globs: ["**/components/**/*.tsx", "**/app/**/*.tsx"]
+---
+
+# UI/UX Rules
+
+## Component Libraries
+- **Primary**: Shadcn/UI (với Radix UI primitives)
+- **Alternatives**: ReactBit, HeroUI, Tremor
+- Always use headless components for maximum flexibility
+
+## Responsive Design
+- **Mobile-first** approach với Tailwind breakpoints:
+  ```tsx
+  // Base (mobile) → sm → md → lg → xl → 2xl
+  className="p-4 sm:p-6 md:p-8 lg:p-10"
+  ```
+- Test trên các viewport: 320px, 768px, 1024px, 1440px
+
+## Styling Philosophy
+- **NO custom CSS** — use Tailwind utilities exclusively
+- Essential Tailwind plugins:
+  - `@tailwindcss/line-clamp` - text truncation
+  - `@tailwindcss/aspect-ratio` - responsive media
+  - `@tailwindcss/typography` - rich content
+  - `@tailwindcss/forms` - form styling
+
+## Loading & Feedback
+- **Skeleton screens** instead of spinners:
+  ```tsx
+  <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+  ```
+- Progressive loading for lists (show items as they load)
+- Optimistic UI updates for better perceived performance
+
+## Interactive Components
+- Use **Radix UI** or **Headless UI** for:
+  - Modals/Dialogs
+  - Dropdowns/Selects
+  - Tooltips/Popovers
+  - Accordions/Collapsibles
+- Animation với Framer Motion hoặc Tailwind transitions
+
+## Dark Mode
+- Implement với `class` strategy:
+  ```tsx
+  <html className={theme === 'dark' ? 'dark' : ''}>
+  ```
+- Use Tailwind `dark:` variants cho all colors
+- Test contrast ratios: WCAG AA minimum
+
+## Accessibility Standards
+- **Keyboard navigation**: All interactive elements
+- **Focus management**:
+  - `focus-visible:` for keyboard users
+  - Trap focus in modals
+  - Return focus after modal close
+- **Screen readers**:
+  - Meaningful `aria-label` and `aria-describedby`
+  - Live regions for dynamic content
+  - Proper heading hierarchy (h1 → h6)
+- **Color & Contrast**:
+  - Never use color alone to convey info
+  - 4.5:1 contrast for normal text
+  - 3:1 for large text
+
+## Error Handling
+- Inline validation với clear messages
+- Error boundaries cho component failures
+- Toast notifications cho async operations
+- Never use tooltips as sole error indicator

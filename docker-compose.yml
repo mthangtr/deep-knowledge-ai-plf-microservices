@@ -1,0 +1,81 @@
+version: "3.8"
+
+services:
+  # MongoDB for AI Agent Chat Service
+  mongodb:
+    image: mongo:7
+    container_name: deep-knowledge-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: deep-knowledge-ai
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - deep-knowledge-network
+
+  # API Gateway
+  api-gateway:
+    build: ./api-gateway
+    container_name: deep-knowledge-api-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: 8080
+      BACKEND_MAIN_URL: http://backend-main:3001
+      BACKEND_AI_CHAT_URL: http://backend-ai-chat:3002
+      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:3001
+    depends_on:
+      - backend-main
+      - backend-ai-chat
+    networks:
+      - deep-knowledge-network
+
+  # Backend Main Service
+  backend-main:
+    build: ./backend-main
+    container_name: deep-knowledge-backend-main
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      FLOWISE_API_URL: ${FLOWISE_API_URL}
+      FLOWISE_API_KEY: ${FLOWISE_API_KEY}
+    networks:
+      - deep-knowledge-network
+
+  # Backend AI Agent Chat Service
+  backend-ai-chat:
+    build: ./backend-ai-agent-chat
+    container_name: deep-knowledge-backend-ai-chat
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: 3002
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+      MONGODB_URI: mongodb://admin:password123@mongodb:27017/deep-knowledge-ai?authSource=admin
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-3.5-turbo}
+    depends_on:
+      - mongodb
+    networks:
+      - deep-knowledge-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  deep-knowledge-network:
+    driver: bridge

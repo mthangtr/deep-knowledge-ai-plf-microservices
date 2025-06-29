@@ -1,0 +1,13 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+- Environment variables validation
+- CSRF protection
+- XSS prevention
+- SQL injection protection
+- Rate limiting per IP/user
+- Input sanitization
+- JWT với refresh tokens
+

@@ -1,0 +1,109 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: API & server development rules for route handlers and backend logic
+alwaysApply: true
+globs: ["**/route.ts", "**/api/**/*.ts"]
+---
+
+# API & Server Rules
+
+## Route Handler Pattern
+- Use App Router `route.ts` for API endpoints
+- Standard HTTP methods:
+  ```ts
+  export async function GET(request: Request) {}
+  export async function POST(request: Request) {}
+  export async function PUT(request: Request) {}
+  export async function DELETE(request: Request) {}
+  ```
+
+## Input Validation
+- **Never trust client input** — validate everything
+- Use Zod for schema validation:
+  ```ts
+  const schema = z.object({
+    email: z.string().email(),
+    password: z.string().min(8)
+  })
+  
+  const body = await request.json()
+  const validated = schema.parse(body) // throws if invalid
+  ```
+
+## Response Format
+- Consistent response structure:
+  ```ts
+  type ApiResponse<T> = {
+    success: boolean
+    data?: T
+    error?: string
+    meta?: {
+      page?: number
+      total?: number
+      timestamp: string
+    }
+  }
+  ```
+- Use proper HTTP status codes
+- Include request ID for tracking
+
+## Security & Rate Limiting
+- Implement rate limiting với Upstash Redis:
+  ```ts
+  import { Ratelimit } from "@upstash/ratelimit"
+  import { Redis } from "@upstash/redis"
+  
+  const ratelimit = new Ratelimit({
+    redis: Redis.fromEnv(),
+    limiter: Ratelimit.slidingWindow(10, "10 s"),
+  })
+  ```
+- CORS configuration
+- Authentication middleware
+- Request sanitization
+
+## Error Handling
+- Centralized error handler:
+  ```ts
+  try {
+    // API logic
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, error: "Validation failed", details: error.errors },
+        { status: 400 }
+      )
+    }
+    
+    logger.error("API Error", error)
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+  ```
+
+## Performance & Monitoring
+- Request/Response logging với correlation IDs
+- OpenAPI/Swagger documentation
+- Health check endpoints (`/api/health`)
+- Metrics collection (response time, error rate)
+- Database query monitoring
+
+## Background Jobs
+- Use queues for heavy operations:
+  - Bull for Redis-based queues
+  - Agenda for MongoDB
+  - Inngest for serverless
+- Implement retry logic
+- Dead letter queues for failed jobs
+
+## External APIs
+- Timeout strategy (default 30s)
+- Retry với exponential backoff
+- Circuit breaker pattern
+- Cache responses where appropriate
