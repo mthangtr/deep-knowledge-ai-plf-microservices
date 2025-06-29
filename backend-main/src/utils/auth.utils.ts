@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request } from "express";
 import jwt from "jsonwebtoken";
 import { supabase } from "../config/supabase";
 import { JWT_SECRET } from "../config/jwt";

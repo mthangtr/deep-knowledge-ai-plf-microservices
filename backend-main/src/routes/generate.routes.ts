@@ -205,7 +205,7 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
 });
 
 // GET /api/learning/generate - Get thông tin về service
-router.get("/", (req, res) => {
+router.get("/", (_req, res) => {
   return res.json({
     service: "AI Learning Tree Generation",
     endpoints: {

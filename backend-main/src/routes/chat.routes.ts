@@ -4,6 +4,21 @@ import { authenticate } from "../middleware/auth.middleware";
 import { validateTopicOwnership } from "../utils/auth.utils";
 import { AuthRequest } from "../types";
 
+// Type definitions for LangChain service response
+interface LangChainResponse {
+  response: string;
+  session_id: string;
+  model_used: string;
+  processing_time?: number;
+  context_info?: {
+    estimated_tokens?: number;
+    [key: string]: any;
+  };
+  session_stats?: {
+    [key: string]: any;
+  };
+}
+
 const router = Router();
 
 // GET /api/learning/chat - Lấy danh sách chat messages
@@ -456,7 +471,7 @@ router.post("/ai", authenticate, async (req: AuthRequest, res) => {
         throw new Error(`LangChain service error: ${aiResponse.status}`);
       }
 
-      const aiData = await aiResponse.json();
+      const aiData = (await aiResponse.json()) as LangChainResponse;
 
       // Save AI response to database
       const aiMessage = {

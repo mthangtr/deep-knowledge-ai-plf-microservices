@@ -1,6 +1,5 @@
 import { Router } from "express";
 import jwt from "jsonwebtoken";
-import { supabase } from "../config/supabase";
 import { JWT_SECRET, JWT_EXPIRES_IN } from "../config/jwt";
 
 const router = Router();

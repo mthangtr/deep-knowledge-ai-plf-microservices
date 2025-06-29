@@ -73,7 +73,7 @@ class DebugLogger {
 const debugLogger = new DebugLogger();
 
 // GET /api/debug/flowiseai - Xem log gần nhất
-router.get("/flowiseai", (req, res) => {
+router.get("/flowiseai", (_req, res) => {
   try {
     const latestLog = debugLogger.getLatestLog();
 
@@ -103,7 +103,7 @@ router.get("/flowiseai", (req, res) => {
 });
 
 // DELETE /api/debug/flowiseai - Cleanup old logs
-router.delete("/flowiseai", (req, res) => {
+router.delete("/flowiseai", (_req, res) => {
   try {
     debugLogger.cleanupOldLogs();
 

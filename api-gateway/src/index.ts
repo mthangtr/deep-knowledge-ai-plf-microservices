@@ -16,6 +16,8 @@ app.use(
   cors({
     origin: process.env.ALLOWED_ORIGINS?.split(",") || [
       "http://localhost:3000",
+      "http://localhost:8001",
+      "http://localhost:3001",
     ],
     credentials: true,
   })
@@ -29,7 +31,7 @@ const limiter = rateLimit({
 app.use("/api/", limiter);
 
 // Health check
-app.get("/health", (req, res) => {
+app.get("/health", (_req, res) => {
   res.json({ status: "healthy", timestamp: new Date().toISOString() });
 });
 
@@ -43,7 +45,7 @@ const BACKEND_AI_CHAT_URL =
 const proxyOptions = {
   changeOrigin: true,
   logLevel: "debug" as const,
-  onError: (err: Error, req: express.Request, res: express.Response) => {
+  onError: (err: Error, _req: express.Request, res: express.Response) => {
     console.error("Proxy error:", err);
     res.status(502).json({ error: "Bad Gateway", message: err.message });
   },
@@ -94,9 +96,9 @@ app.use(
 app.use(
   (
     err: Error,
-    req: express.Request,
+    _req: express.Request,
     res: express.Response,
-    next: express.NextFunction
+    _next: express.NextFunction
   ) => {
     console.error("Gateway error:", err);
     res.status(500).json({ error: "Internal Server Error" });

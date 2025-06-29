@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import { getAuthenticatedUser } from "../utils/auth.utils";
 import { AuthRequest } from "../types";
 
