@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import os
+import time
+from datetime import datetime
 from dotenv import load_dotenv
 from loguru import logger
 from contextlib import asynccontextmanager
@@ -160,9 +162,9 @@ async def smart_chat(request: SmartChatRequest):
         else:
             logger.info(f"Using existing session: {session_id}")
         
-        # FIXED: Get context BEFORE adding current message để tránh duplicate
+        # ENHANCED: Get context with quality analysis
         # Get smart context for this message (không bao gồm message hiện tại)
-        context_package = await db_context_manager.get_context_for_message(
+        context_package, quality_metrics = await db_context_manager.get_context_for_message(
             session_id=session_id,
             user_id=request.user_id,
             message=request.message
@@ -242,6 +244,14 @@ async def smart_chat(request: SmartChatRequest):
         
         processing_time = time.time() - start_time
         
+        # ENHANCED: Record performance metrics for monitoring
+        await db_context_manager.record_performance_metrics(
+            response_time=processing_time,
+            model_used=result["model_used"],
+            context_metrics=quality_metrics,
+            error=False
+        )
+        
         return SmartChatResponse(
             response=result["response"],
             model_used=result["model_used"],
@@ -251,7 +261,13 @@ async def smart_chat(request: SmartChatRequest):
                 "recent_messages_count": len(context_package.recent),
                 "relevant_messages_count": len(context_package.relevant),
                 "has_summary": context_package.summary is not None,
-                "estimated_tokens": context_package.total_tokens_estimate
+                "estimated_tokens": context_package.total_tokens_estimate,
+                # NEW: Quality metrics
+                "quality_score": quality_metrics.overall_quality,
+                "quality_level": quality_metrics.quality_level.value,
+                "relevance_score": quality_metrics.relevance_score,
+                "efficiency_score": quality_metrics.efficiency_score,
+                "processing_time_ms": quality_metrics.processing_time * 1000
             },
             session_stats=session_stats,
             session_id=session_id
@@ -259,6 +275,20 @@ async def smart_chat(request: SmartChatRequest):
         
     except Exception as e:
         logger.error(f"Smart chat error: {e}")
+        
+        # Record error metrics if possible
+        try:
+            processing_time = time.time() - start_time if 'start_time' in locals() else 0.0
+            if 'quality_metrics' in locals() and quality_metrics is not None:
+                await db_context_manager.record_performance_metrics(
+                    response_time=processing_time,
+                    model_used=request.model or "unknown",
+                    context_metrics=quality_metrics,
+                    error=True
+                )
+        except Exception as perf_error:
+            logger.debug(f"Could not record error metrics: {perf_error}")
+        
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/multi-agent", response_model=MultiAgentResponse)
@@ -336,6 +366,110 @@ async def get_user_sessions(user_id: str, active_only: bool = True):
             }
     except Exception as e:
         logger.error(f"Error getting user sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# NEW ENDPOINTS: Performance Monitoring & Optimization
+
+@app.get("/monitoring/performance")
+async def get_performance_metrics(hours_back: int = 24):
+    """Get performance monitoring summary"""
+    try:
+        summary = db_context_manager.get_performance_summary(hours_back)
+        return summary
+    except Exception as e:
+        logger.error(f"Error getting performance metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/monitoring/quality")
+async def get_quality_trends(hours_back: int = 24):
+    """Get context quality trends"""
+    try:
+        trends = db_context_manager.get_quality_trends(hours_back)
+        return trends
+    except Exception as e:
+        logger.error(f"Error getting quality trends: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/monitoring/optimization-report")
+async def get_optimization_report():
+    """Get comprehensive optimization recommendations"""
+    try:
+        report = await db_context_manager.get_optimization_report()
+        return report
+    except Exception as e:
+        logger.error(f"Error generating optimization report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/monitoring/alerts")
+async def get_recent_alerts(hours_back: int = 1):
+    """Get recent performance alerts"""
+    try:
+        alerts = db_context_manager.performance_monitor.get_recent_alerts(hours_back)
+        
+        return {
+            "period_hours": hours_back,
+            "total_alerts": len(alerts),
+            "alerts": [
+                {
+                    "level": alert.level.value,
+                    "type": alert.type,
+                    "message": alert.message,
+                    "metric_value": alert.metric_value,
+                    "threshold": alert.threshold,
+                    "timestamp": alert.timestamp.isoformat(),
+                    "recommendations": alert.recommendations
+                }
+                for alert in alerts
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error getting alerts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/monitoring/dashboard")
+async def get_monitoring_dashboard():
+    """Get comprehensive monitoring dashboard data"""
+    try:
+        # Get current metrics
+        current_metrics = db_context_manager.performance_monitor.get_current_metrics()
+        
+        # Get recent alerts
+        recent_alerts = db_context_manager.performance_monitor.get_recent_alerts(1)
+        
+        # Get performance summary
+        performance_24h = db_context_manager.get_performance_summary(24)
+        
+        # Get quality trends
+        quality_24h = db_context_manager.get_quality_trends(24)
+        
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "current_metrics": {
+                "avg_response_time": current_metrics.avg_response_time if current_metrics else 0,
+                "avg_context_quality": current_metrics.avg_context_quality if current_metrics else 0,
+                "requests_per_minute": current_metrics.requests_per_minute if current_metrics else 0,
+                "error_rate": current_metrics.error_rate if current_metrics else 0,
+                "most_used_model": current_metrics.most_used_model if current_metrics else "none"
+            },
+            "alerts": {
+                "total_last_hour": len(recent_alerts),
+                "critical_count": len([a for a in recent_alerts if a.level.value == "CRITICAL"]),
+                "latest_alerts": [
+                    {
+                        "level": a.level.value,
+                        "type": a.type,
+                        "message": a.message,
+                        "timestamp": a.timestamp.isoformat()
+                    }
+                    for a in recent_alerts[:5]  # Latest 5 alerts
+                ]
+            },
+            "performance_24h": performance_24h,
+            "quality_24h": quality_24h,
+            "system_status": "healthy" if len([a for a in recent_alerts if a.level.value == "CRITICAL"]) == 0 else "degraded"
+        }
+    except Exception as e:
+        logger.error(f"Error getting monitoring dashboard: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

@@ -27,4 +27,5 @@ multiprocess>=0.70.18
 
 # Utilities
 pydantic-settings>=2.10.1
-loguru>=0.7.3 
+loguru>=0.7.3
+psutil>=6.1.1 
