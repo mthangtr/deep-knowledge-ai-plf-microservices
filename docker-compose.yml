@@ -17,7 +17,7 @@ services:
       LANGCHAIN_SERVICE_URL: http://langchain-python:5000
       FLOWISE_API_URL: https://cloud.flowiseai.com/api/v1/prediction/3e25445a-0652-45de-8ad6-8e1c78740a8c
       FLOWISE_API_KEY: YQT-c-WYOGuUiRY7YqK5xAgoGvGnVlzKACW1dJEapS4
-      OPENAI_API_KEY: ""
+      OPENAI_API_KEY: "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"
       OPENAI_MODEL: gpt-3.5-turbo
     networks:
       - deep-knowledge-network
@@ -36,8 +36,8 @@ services:
       APP_URL: http://localhost:3000
       APP_NAME: "Deep Knowledge AI Platform"
       FORCE_OPENAI: "false"
-      OPENAI_API_KEY: ""
-      DATABASE_URL: ""
+      OPENAI_API_KEY: "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"
+      DATABASE_URL: "postgresql://postgres.jkykheapwyozbztnntph:Thang979712*@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres"
     networks:
       - deep-knowledge-network
 
