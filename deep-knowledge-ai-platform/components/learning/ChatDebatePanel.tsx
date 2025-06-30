@@ -149,9 +149,7 @@ export function ChatDebatePanel({
         <div className="flex flex-col h-full bg-background">
             {/* Header - Clean minimal design */}
             <div className="flex items-center gap-3 p-6 bg-background/80 backdrop-blur-sm">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center text-primary-foreground">
-                    <span className="text-lg">{selectedTopic.icon}</span>
-                </div>
+
                 <div className="flex-1 min-w-0">
                     <h2 className="text-lg font-medium text-foreground truncate">{selectedTopic.title}</h2>
                     <p className="text-sm text-muted-foreground">

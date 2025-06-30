@@ -15,9 +15,16 @@ import {
     Plus,
     MessageSquareQuote,
     Edit3,
-    Trash2
+    Trash2,
+    ArrowLeft
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from "@/components/ui/tabs"
 
 interface NotesPanelProps {
     notes: Note[];
@@ -43,6 +50,20 @@ export function NotesPanel({
         onAddNote(newNoteContent.trim());
         setNewNoteContent('');
         setIsAddingNote(false);
+    };
+
+    const handleCancelAddNote = () => {
+        setIsAddingNote(false);
+        setNewNoteContent('');
+    };
+
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (event.ctrlKey && event.key === 's') {
+            event.preventDefault();
+            if (newNoteContent.trim()) {
+                handleAddNote();
+            }
+        }
     };
 
     const handleCopyAllNotes = () => {
@@ -84,6 +105,127 @@ export function NotesPanel({
             minute: '2-digit'
         });
     };
+
+    const renderNotesList = () => (
+        <div className="space-y-6">
+            {/* Extracted Notes */}
+            {extractedNotes.length > 0 && (
+                <div>
+                    <div className="flex items-center gap-2 mb-3">
+                        <MessageSquareQuote className="h-4 w-4 text-status-info" />
+                        <h3 className="font-medium text-sm">Trích xuất từ đối thoại</h3>
+                        <Badge variant="secondary" className="text-xs">
+                            {extractedNotes.length}
+                        </Badge>
+                    </div>
+                    <div className="space-y-3">
+                        {extractedNotes.map((note) => (
+                            <div
+                                key={note.id}
+                                className="p-3 bg-status-info/10 border border-status-info rounded-lg"
+                            >
+                                <div className="text-sm leading-relaxed mb-2">
+                                    {note.content}
+                                </div>
+                                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                    <span>Trích xuất</span>
+                                    <span>{formatTime(note.createdAt)}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Manual Notes */}
+            <div>
+                <div className="flex items-center gap-2 mb-3">
+                    <Edit3 className="h-4 w-4 text-status-success" />
+                    <h3 className="font-medium text-sm">Ghi chú cá nhân</h3>
+                    <Badge variant="secondary" className="text-xs">
+                        {manualNotes.length}
+                    </Badge>
+                </div>
+
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsAddingNote(true)}
+                    className="w-full mb-4 gap-2 border-dashed"
+                >
+                    <Plus className="h-4 w-4" />
+                    Thêm ghi chú mới
+                </Button>
+
+                {/* Manual Notes List */}
+                <div className="space-y-3">
+                    {manualNotes.map((note) => (
+                        <div
+                            key={note.id}
+                            className="p-3 bg-status-success/10 border border-status-success rounded-lg"
+                        >
+                            <div className="text-sm leading-relaxed mb-2">
+                                {note.content}
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <span>Ghi chú tay</span>
+                                <span>{formatTime(note.createdAt)}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Empty State */}
+            {notes.length === 0 && (
+                <div className="text-center py-8">
+                    <NotebookPen className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+                    <h3 className="font-medium mb-2">Chưa có ghi chú</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                        Bắt đầu cuộc đối thoại và đánh dấu các đoạn chat quan trọng
+                    </p>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsAddingNote(true)}
+                        className="gap-2"
+                    >
+                        <Plus className="h-4 w-4" />
+                        Tạo ghi chú đầu tiên
+                    </Button>
+                </div>
+            )}
+        </div>
+    );
+
+    if (isAddingNote) {
+        return (
+            <div className="flex flex-col h-full bg-card p-4">
+                <div className='flex items-center justify-between mb-3'>
+                    <div className="flex items-center gap-2">
+                        <Edit3 className="h-4 w-4 text-status-success" />
+                        <h3 className="font-medium text-sm">Ghi chú cá nhân</h3>
+                    </div>
+                    <div>
+                        <Button variant="outline" size="sm" onClick={handleCancelAddNote} className="gap-2">
+                            <ArrowLeft className="h-4 w-4" />
+                            Quay lại
+                        </Button>
+                    </div>
+                </div>
+                <div className="flex-1 p-3 border border-dashed border-border rounded-lg">
+                    <Textarea
+                        value={newNoteContent}
+                        onChange={(e) => setNewNoteContent(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Viết ghi chú của bạn... (Ctrl+S để lưu)"
+                        className="w-full h-full p-0 text-base resize-none bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 outline-none"
+                        autoFocus
+                    />
+                </div>
+            </div>
+        )
+    }
 
     if (!selectedTopic) {
         return (
@@ -145,127 +287,19 @@ export function NotesPanel({
 
             {/* Content */}
             <ScrollArea className="flex-1">
-                <div className="p-4 space-y-6">
-                    {/* Extracted Notes */}
-                    {extractedNotes.length > 0 && (
-                        <div>
-                            <div className="flex items-center gap-2 mb-3">
-                                <MessageSquareQuote className="h-4 w-4 text-status-info" />
-                                <h3 className="font-medium text-sm">Trích xuất từ đối thoại</h3>
-                                <Badge variant="secondary" className="text-xs">
-                                    {extractedNotes.length}
-                                </Badge>
-                            </div>
-                            <div className="space-y-3">
-                                {extractedNotes.map((note) => (
-                                    <div
-                                        key={note.id}
-                                        className="p-3 bg-status-info/10 border border-status-info rounded-lg"
-                                    >
-                                        <div className="text-sm leading-relaxed mb-2">
-                                            {note.content}
-                                        </div>
-                                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                            <span>Trích xuất</span>
-                                            <span>{formatTime(note.createdAt)}</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Manual Notes */}
-                    <div>
-                        <div className="flex items-center gap-2 mb-3">
-                            <Edit3 className="h-4 w-4 text-status-success" />
-                            <h3 className="font-medium text-sm">Ghi chú cá nhân</h3>
-                            <Badge variant="secondary" className="text-xs">
-                                {manualNotes.length}
-                            </Badge>
-                        </div>
-
-                        {/* Add Note Form */}
-                        {isAddingNote ? (
-                            <div className="mb-4 p-3 border border-dashed border-border rounded-lg">
-                                <Textarea
-                                    value={newNoteContent}
-                                    onChange={(e) => setNewNoteContent(e.target.value)}
-                                    placeholder="Viết ghi chú của bạn..."
-                                    className="mb-3 resize-none"
-                                    rows={3}
-                                />
-                                <div className="flex gap-2">
-                                    <Button
-                                        size="sm"
-                                        onClick={handleAddNote}
-                                        disabled={!newNoteContent.trim()}
-                                    >
-                                        Lưu
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => {
-                                            setIsAddingNote(false);
-                                            setNewNoteContent('');
-                                        }}
-                                    >
-                                        Hủy
-                                    </Button>
-                                </div>
-                            </div>
-                        ) : (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setIsAddingNote(true)}
-                                className="w-full mb-4 gap-2 border-dashed"
-                            >
-                                <Plus className="h-4 w-4" />
-                                Thêm ghi chú mới
-                            </Button>
-                        )}
-
-                        {/* Manual Notes List */}
-                        <div className="space-y-3">
-                            {manualNotes.map((note) => (
-                                <div
-                                    key={note.id}
-                                    className="p-3 bg-status-success/10 border border-status-success rounded-lg"
-                                >
-                                    <div className="text-sm leading-relaxed mb-2">
-                                        {note.content}
-                                    </div>
-                                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                        <span>Ghi chú tay</span>
-                                        <span>{formatTime(note.createdAt)}</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Empty State */}
-                    {notes.length === 0 && (
-                        <div className="text-center py-8">
-                            <NotebookPen className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-50" />
-                            <h3 className="font-medium mb-2">Chưa có ghi chú</h3>
-                            <p className="text-sm text-muted-foreground mb-4">
-                                Bắt đầu cuộc đối thoại và đánh dấu các đoạn chat quan trọng
-                            </p>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setIsAddingNote(true)}
-                                className="gap-2"
-                            >
-                                <Plus className="h-4 w-4" />
-                                Tạo ghi chú đầu tiên
-                            </Button>
-                        </div>
-                    )}
-                </div>
+                <Tabs defaultValue="section_notes" className="p-4 h-full flex flex-col">
+                    <TabsList className="grid w-full grid-cols-2 mb-4">
+                        <TabsTrigger value="all_topic_notes">Tất cả</TabsTrigger>
+                        <TabsTrigger value="section_notes">Notes của phần học</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="all_topic_notes" className="flex-1">
+                        {/* TODO: Logic to show all topic notes will be implemented here */}
+                        {renderNotesList()}
+                    </TabsContent>
+                    <TabsContent value="section_notes" className="flex-1">
+                        {renderNotesList()}
+                    </TabsContent>
+                </Tabs>
             </ScrollArea>
         </div>
     );

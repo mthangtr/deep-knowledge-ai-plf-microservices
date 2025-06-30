@@ -19,6 +19,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, TreePine, MessageSquare, BookOpen, Plus, Loader2 } from 'lucide-react';
 import { clearAuthState, logAuthState } from '@/lib/debug-auth';
+import {
+    ResizableHandle,
+    ResizablePanel,
+    ResizablePanelGroup,
+} from "@/components/ui/resizable"
+import { cn } from '@/lib/utils';
 
 interface LearningPlatformLayoutProps {
     children?: React.ReactNode;
@@ -372,29 +378,43 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
                 />
             </div>
 
-            {/* Panel giữa - Main Content */}
-            <div className="flex-1 min-w-0">
-                {renderMainContent()}
+            <div className="flex-1 flex min-w-0">
+                <ResizablePanelGroup
+                    direction="horizontal"
+                    className="w-full"
+                    key={selectedTopic ? 'with-notes' : 'without-notes'}
+                >
+                    {/* Panel giữa - Main Content */}
+                    <ResizablePanel defaultSize={selectedTopic ? 65 : 100} minSize={30}>
+                        <div className="h-full">
+                            {renderMainContent()}
+                        </div>
+                    </ResizablePanel>
+
+                    {/* Panel phải - Notes (hiển thị khi có selected topic) */}
+                    {selectedTopic && (
+                        <>
+                            <ResizableHandle withHandle />
+                            <ResizablePanel defaultSize={35} minSize={20}>
+                                <NotesPanel
+                                    notes={formattedNotes}
+                                    selectedTopic={{
+                                        id: selectedNodeForChat?.id || selectedTopic.id,
+                                        title: selectedNodeForChat?.title || selectedTopic.title,
+                                        icon: selectedNodeForChat ? '🧠' : '📚',
+                                        createdAt: new Date(selectedNodeForChat?.created_at || selectedTopic.created_at),
+                                        updatedAt: new Date(selectedNodeForChat?.updated_at || selectedTopic.updated_at),
+                                        messageCount: formattedMessages.length
+                                    }}
+                                    onShowMindMap={() => setShowMindMap(true)}
+                                    onAddNote={handleAddNote}
+                                />
+                            </ResizablePanel>
+                        </>
+                    )}
+                </ResizablePanelGroup>
             </div>
 
-            {/* Panel phải - Notes (hiển thị khi có selected topic) */}
-            {selectedTopic && (
-                <div className="w-96 border-l border-border">
-                    <NotesPanel
-                        notes={formattedNotes}
-                        selectedTopic={{
-                            id: selectedNodeForChat?.id || selectedTopic.id,
-                            title: selectedNodeForChat?.title || selectedTopic.title,
-                            icon: selectedNodeForChat ? '🧠' : '📚',
-                            createdAt: new Date(selectedNodeForChat?.created_at || selectedTopic.created_at),
-                            updatedAt: new Date(selectedNodeForChat?.updated_at || selectedTopic.updated_at),
-                            messageCount: formattedMessages.length
-                        }}
-                        onShowMindMap={() => setShowMindMap(true)}
-                        onAddNote={handleAddNote}
-                    />
-                </div>
-            )}
 
             {/* Mind Map Modal */}
             {showMindMap && selectedTopic && (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { learningService } from "@/lib/services/learning";
 import { LearningChat } from "@/types/database";
 import { useAIChat } from "./use-ai-chat";
@@ -27,67 +27,76 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
   // Integrate with new AI chat system
   const aiChat = useAIChat();
 
-  // Determine chat mode
-  const chatMode = nodeId ? "node" : topicId ? "topic" : null;
+  // Determine chat mode and memoize it to prevent unnecessary re-renders
+  const chatMode = useMemo(
+    () => (nodeId ? "node" : topicId ? "topic" : null),
+    [topicId, nodeId]
+  );
 
   // Fetch messages when topic/node changes
   useEffect(() => {
-    if (topicId && chatMode) {
-      setState((prev) => ({
-        ...prev,
-        currentChatMode: chatMode,
-        currentTopicId: topicId,
-        currentNodeId: nodeId || null,
-      }));
-
-      fetchMessages();
-    } else {
-      setState((prev) => ({
-        ...prev,
-        messages: [],
-        currentChatMode: null,
-        currentTopicId: null,
-        currentNodeId: null,
-      }));
-    }
-  }, [topicId, nodeId, chatMode]);
-
-  // Fetch messages from API
-  const fetchMessages = useCallback(async () => {
-    if (!topicId) return;
-
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-
-    try {
-      const response = await learningService.getLearningChats(topicId, nodeId);
-
-      if (response.error) {
+    const fetchMessages = async () => {
+      if (!topicId || !chatMode) {
         setState((prev) => ({
           ...prev,
-          loading: false,
-          error: response.error || "Lỗi khi tải tin nhắn",
+          messages: [],
+          currentChatMode: null,
+          currentTopicId: null,
+          currentNodeId: null,
         }));
         return;
       }
 
       setState((prev) => ({
         ...prev,
-        messages: response.data || [],
-        loading: false,
+        loading: true,
         error: null,
+        currentChatMode: chatMode,
+        currentTopicId: topicId,
+        currentNodeId: nodeId || null,
       }));
-    } catch (error) {
-      setState((prev) => ({
-        ...prev,
-        loading: false,
-        error: "Lỗi kết nối khi tải tin nhắn",
-      }));
-    }
-  }, [topicId, nodeId]);
+
+      try {
+        const response = await learningService.getLearningChats(
+          topicId,
+          nodeId
+        );
+
+        if (response.error) {
+          setState((prev) => ({
+            ...prev,
+            loading: false,
+            error: response.error || "Lỗi khi tải tin nhắn",
+          }));
+          return;
+        }
+
+        setState((prev) => ({
+          ...prev,
+          messages: response.data || [],
+          loading: false,
+          error: null,
+        }));
+      } catch (error) {
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          error: "Lỗi kết nối khi tải tin nhắn",
+        }));
+      }
+    };
+
+    fetchMessages();
+  }, [topicId, nodeId, chatMode]);
 
   // Send message using new AI chat system
   const sendMessage = useCallback(
     async (params: { message: string }) => {
+      console.log(
+        ">>> [use-learning-chat] sendMessage triggered at",
+        new Date().toISOString()
+      );
+
       if (!topicId || !params.message.trim()) return;
 
       // Create optimistic user message immediately
@@ -145,9 +154,9 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
               (msg) => msg.id !== optimisticUserMessage.id
             ),
             sending: false,
-            error: response.error || "Lỗi khi gửi tin nhắn",
+            error: "Lỗi kết nối khi gửi tin nhắn",
           }));
-          return { error: response.error };
+          return { error: "Lỗi kết nối" };
         }
       } catch (error) {
         // Remove optimistic message on error
@@ -167,42 +176,35 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
 
   // Create auto AI prompt for topic (when first opened)
   const createTopicAutoPrompt = useCallback(
-    async (topicData: {
-      topic_id: string;
-      topic_title: string;
-      topic_description: string;
-    }) => {
-      // Check if already has messages
-      if (state.messages.length > 0) {
+    async (
+      topicData: {
+        topic_id: string;
+        topic_title: string;
+        topic_description: string;
+      },
+      hasExistingChat: boolean
+    ) => {
+      // Check is now done via argument, making the hook stable
+      if (hasExistingChat) {
         return { skipped: true, hasExistingChat: true };
       }
 
       setState((prev) => ({ ...prev, sending: true, error: null }));
 
       try {
-        // Use AI chat to create welcome message
-        const welcomeMessage = `Xin chào! Tôi là AI Mentor và sẽ hỗ trợ bạn học về "${topicData.topic_title}". 
-        
-${topicData.topic_description}
-
-Hãy bắt đầu bằng cách hỏi tôi bất kỳ điều gì về chủ đề này!`;
-
         const response = await aiChat.sendMessage(
           "Chào bạn, tôi muốn học về chủ đề này. Bạn có thể giới thiệu và hướng dẫn tôi không?",
           topicData.topic_id
         );
 
         if (response.success && response.data) {
-          // Destructure to help TypeScript understand data is not undefined
           const { user_message, ai_message } = response.data;
-
           setState((prev) => ({
             ...prev,
             messages: [user_message, ai_message],
             sending: false,
             error: null,
           }));
-
           return { data: ai_message, skipped: false };
         } else {
           setState((prev) => ({
@@ -221,7 +223,7 @@ Hãy bắt đầu bằng cách hỏi tôi bất kỳ điều gì về chủ đ�
         return { error: "Lỗi kết nối", skipped: false };
       }
     },
-    [state.messages.length, aiChat.sendMessage]
+    [aiChat.sendMessage] // Now this is stable
   );
 
   // Create auto AI prompt for node using prompt_sample
@@ -245,6 +247,11 @@ Hãy bắt đầu bằng cách hỏi tôi bất kỳ điều gì về chủ đ�
           messageToSend,
           nodeData.topic_id,
           nodeData.node_id
+        );
+
+        console.log(
+          ">>> [use-learning-chat] createNodeAutoPrompt response",
+          response
         );
 
         if (response.success && response.data) {
@@ -335,7 +342,6 @@ Hãy bắt đầu bằng cách hỏi tôi bất kỳ điều gì về chủ đ�
     sendMessage,
     createTopicAutoPrompt,
     createNodeAutoPrompt,
-    fetchMessages,
     clearMessages,
     clearError,
 
@@ -344,5 +350,8 @@ Hãy bắt đầu bằng cách hỏi tôi bất kỳ điều gì về chủ đ�
     messagesCount: state.messages.length,
     isTopicChat: chatMode === "topic",
     isNodeChat: chatMode === "node",
+
+    // Stable alternative
+    createTopicAutoPromptStable: createTopicAutoPrompt,
   };
 }
