@@ -195,11 +195,25 @@ async def smart_chat(request: SmartChatRequest):
             })
         
         # Generate AI response
-        result = await orchestrator.single_agent_chat(
-            message=request.message,
-            context=llm_context,
-            options={"model": request.model}
-        )
+        logger.info(f"Calling single_agent_chat with model: {request.model}")
+        logger.info(f"Context messages count: {len(llm_context)}")
+        
+        try:
+            result = await orchestrator.single_agent_chat(
+                message=request.message,
+                context=llm_context,
+                options={"model": request.model}
+            )
+            logger.info(f"AI response generated: {len(result['response'])} chars")
+        except Exception as ai_error:
+            logger.error(f"AI generation failed: {ai_error}")
+            # Fallback response
+            result = {
+                "response": "Xin lỗi, tôi đang gặp sự cố kỹ thuật. Hãy thử lại sau.",
+                "model_used": request.model or "fallback",
+                "processing_time": 0.1,
+                "agent_info": {"type": "fallback", "error": str(ai_error)}
+            }
         
         # Add AI response to context
         await db_context_manager.add_message(

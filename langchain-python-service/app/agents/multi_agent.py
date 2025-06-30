@@ -47,7 +47,8 @@ class MultiAgentOrchestrator:
             llm = LLMConfig.get_llm(
                 model_name=model_name,
                 temperature=options.get("temperature", 0.7) if options else 0.7,
-                max_tokens=options.get("max_tokens", 2000) if options else 2000
+                max_tokens=options.get("max_tokens", 2000) if options else 2000,
+                enable_retry=False  # Disable retry wrapper to avoid field modification
             )
             
             # Build messages
@@ -83,17 +84,20 @@ Hãy tương tác một cách thân thiện, động viên và hỗ trợ tốt 
             logger.info(f"Sending {len(messages)} messages to LLM")
             response = await llm.ainvoke(messages)
             logger.info(f"LLM response type: {type(response)}")
-            logger.info(f"LLM response content type: {type(response.content)}")
-            logger.info(f"LLM response content: {response.content}")
             
             processing_time = time.time() - start_time
             
             # Handle response content (could be str or list)
-            content = response.content
-            if isinstance(content, list):
-                response_text = " ".join(str(item) for item in content)
+            if hasattr(response, 'content'):
+                content = response.content
+                logger.info(f"LLM response content type: {type(content)}")
+                if isinstance(content, list):
+                    response_text = " ".join(str(item) for item in content)
+                else:
+                    response_text = str(content)
             else:
-                response_text = str(content)
+                logger.warning("Response has no content attribute, using string representation")
+                response_text = str(response)
             
             return {
                 "response": response_text,
@@ -216,20 +220,29 @@ Trả lời ngắn gọn (tối đa 150 từ) và tập trung vào vai trò củ
     async def _agent_response_async(self, agent: AgentConfig, prompt: str) -> str:
         """Get async response from a single agent"""
         try:
+            logger.info(f"Agent {agent.name} generating response...")
             llm = LLMConfig.get_llm(
                 model_name=agent.model,
                 temperature=agent.temperature,
-                max_tokens=agent.max_tokens
+                max_tokens=agent.max_tokens,
+                enable_retry=False  # Disable retry wrapper to avoid field modification
             )
             
             messages = [HumanMessage(content=prompt)]
             response = await llm.ainvoke(messages)
             
             # Handle response content (could be str or list)
-            content = response.content
-            if isinstance(content, list):
-                return " ".join(str(item) for item in content)
-            return str(content)
+            if hasattr(response, 'content'):
+                content = response.content
+                if isinstance(content, list):
+                    result = " ".join(str(item) for item in content)
+                else:
+                    result = str(content)
+                logger.info(f"Agent {agent.name} response: {len(result)} chars")
+                return result
+            else:
+                logger.warning(f"Agent {agent.name} response has no content")
+                return str(response)
             
         except Exception as e:
             logger.error(f"Agent {agent.name} response error: {e}")
@@ -238,7 +251,10 @@ Trả lời ngắn gọn (tối đa 150 từ) và tập trung vào vai trò củ
     async def _generate_summary(self, conversation: List[Dict], topic: str) -> str:
         """Generate conversation summary"""
         try:
-            llm = LLMConfig.get_llm(model_name="google/gemini-2.0-flash-lite-001")
+            llm = LLMConfig.get_llm(
+                model_name="google/gemini-2.0-flash-lite-001",
+                enable_retry=False  # Disable retry wrapper to avoid field modification
+            )
             
             conv_text = "\n".join([
                 f"{msg['agent']}: {msg['message']}" 
@@ -260,10 +276,14 @@ Tóm tắt ngắn gọn (tối đa 200 từ):
             response = await llm.ainvoke(messages)
             
             # Handle response content (could be str or list)
-            content = response.content
-            if isinstance(content, list):
-                return " ".join(str(item) for item in content)
-            return str(content)
+            if hasattr(response, 'content'):
+                content = response.content
+                if isinstance(content, list):
+                    return " ".join(str(item) for item in content)
+                return str(content)
+            else:
+                logger.warning("Summary response has no content attribute")
+                return str(response)
             
         except Exception as e:
             logger.error(f"Summary generation error: {e}")

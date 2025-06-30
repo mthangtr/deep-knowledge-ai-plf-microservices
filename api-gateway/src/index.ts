@@ -38,8 +38,8 @@ app.get("/health", (_req, res) => {
 // Service URLs
 const BACKEND_MAIN_URL =
   process.env.BACKEND_MAIN_URL || "http://localhost:3001";
-const BACKEND_AI_CHAT_URL =
-  process.env.BACKEND_AI_CHAT_URL || "http://localhost:3002";
+const LANGCHAIN_SERVICE_URL =
+  process.env.LANGCHAIN_SERVICE_URL || "http://localhost:5000";
 
 // Proxy configuration
 const proxyOptions = {
@@ -51,30 +51,19 @@ const proxyOptions = {
   },
 };
 
-// Route to Backend AI Chat Service (specific routes)
+// Route to LangChain Python Service (direct AI chat endpoints)
 app.use(
-  "/api/learning/chat/context",
+  "/api/langchain",
   createProxyMiddleware({
-    target: BACKEND_AI_CHAT_URL,
+    target: LANGCHAIN_SERVICE_URL,
     ...proxyOptions,
     pathRewrite: {
-      "^/api/learning/chat/context": "/api/chat/context",
+      "^/api/langchain": "",
     },
   })
 );
 
-app.use(
-  "/api/learning/chat/langchain",
-  createProxyMiddleware({
-    target: BACKEND_AI_CHAT_URL,
-    ...proxyOptions,
-    pathRewrite: {
-      "^/api/learning/chat/langchain": "/api/chat/langchain",
-    },
-  })
-);
-
-// Route to Backend Main Service (all learning routes including notes and basic chat)
+// Route to Backend Main Service (all learning routes including chat management)
 app.use(
   "/api/learning",
   createProxyMiddleware({
@@ -109,5 +98,5 @@ app.listen(PORT, () => {
   console.log(`🚀 API Gateway running on port ${PORT}`);
   console.log(`📡 Routing to:`);
   console.log(`   - Backend Main: ${BACKEND_MAIN_URL}`);
-  console.log(`   - Backend AI Chat: ${BACKEND_AI_CHAT_URL}`);
+  console.log(`   - LangChain Service: ${LANGCHAIN_SERVICE_URL}`);
 });

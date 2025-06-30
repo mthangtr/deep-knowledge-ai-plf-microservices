@@ -165,27 +165,12 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
             setSelectedNodeForChat(null); // Reset to topic-level chat
             setShowCreationInterface(false);
 
-            // Auto tạo topic-level chat chỉ khi chưa có messages
-            setTimeout(async () => {
-                if (messages.length === 0) {
-                    try {
-                        const response = await createTopicAutoPrompt({
-                            topic_id: dbTopic.id,
-                            topic_title: dbTopic.title,
-                            topic_description: dbTopic.description,
-                        });
-
-                        // Log response để debug
-                        if (response?.skipped) {
-                            console.log('Topic auto-prompt skipped - already has chat history');
-                        } else if (response) {
-                            console.log('Topic auto-prompt created successfully');
-                        }
-                    } catch (error) {
-                        console.error('Lỗi tạo topic auto prompt:', error);
-                    }
-                }
-            }, 100);
+            // Không auto-send message, user tự quyết định khi nào muốn chat
+            console.log('Topic selected:', {
+                topicId: dbTopic.id,
+                topicTitle: dbTopic.title,
+                hasExistingMessages: messages.length > 0
+            });
         }
     };
 
@@ -201,24 +186,11 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
         setShowCreationInterface(false);
         setSelectedNodeForChat(null);
 
-        // Auto tạo topic-level chat cho topic mới (guaranteed chưa có chat)
-        setTimeout(async () => {
-            try {
-                const response = await createTopicAutoPrompt({
-                    topic_id: newTopic.id,
-                    topic_title: newTopic.title,
-                    topic_description: newTopic.description,
-                });
-
-                if (response?.skipped) {
-                    console.log('New topic auto-prompt skipped - unexpected!');
-                } else if (response) {
-                    console.log('New topic auto-prompt created successfully');
-                }
-            } catch (error) {
-                console.error('Lỗi tạo topic auto prompt:', error);
-            }
-        }, 100);
+        // Topic mới được tạo, chờ user tự bắt đầu chat
+        console.log('New topic created and selected:', {
+            topicId: newTopic.id,
+            topicTitle: newTopic.title
+        });
     };
 
     const handleTopicCreatedFromInterface = async (topicId: string) => {
@@ -235,31 +207,14 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
             setSelectedNodeForChat(dbNode); // Switch to node-level chat
             setShowMindMap(false); // Close mind map modal
 
-            // Tự động gửi prompt_sample nếu node có chat enabled
-            setTimeout(async () => {
-                try {
-                    if (dbNode.is_chat_enabled) {
-                        const response = await createNodeAutoPrompt({
-                            topic_id: selectedTopic.id,
-                            node_id: node.id,
-                            node_title: node.title,
-                            node_description: node.description,
-                            prompt_sample: dbNode.prompt_sample, // Use prompt_sample from node
-                        });
-
-                        // Log response để debug
-                        if (response?.skipped) {
-                            console.log('Node prompt skipped - already has chat history');
-                        } else if (response) {
-                            console.log('Node prompt sent successfully:', dbNode.prompt_sample);
-                        }
-                    } else {
-                        console.log('Node chat disabled, showing read-only view');
-                    }
-                } catch (error) {
-                    console.error('Lỗi gửi node prompt:', error);
-                }
-            }, 100);
+            // Chỉ chuyển đến node chat mode mà không auto-send message
+            // User có thể tự gửi message nếu muốn
+            console.log('Switched to node chat mode:', {
+                nodeId: node.id,
+                nodeTitle: node.title,
+                isChatEnabled: dbNode.is_chat_enabled,
+                promptSample: dbNode.prompt_sample
+            });
         }
     };
 

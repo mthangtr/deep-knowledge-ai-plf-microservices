@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { useAuth } from "./use-auth";
+import { API_ENDPOINTS } from "@/lib/config";
 
 interface AIMessage {
   id: string;
@@ -45,7 +45,6 @@ export function useAIChat() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { token } = useAuth();
 
   const sendMessage = useCallback(
     async (
@@ -57,7 +56,19 @@ export function useAIChat() {
       setError(null);
 
       try {
-        const response = await fetch("/api/learning/chat/ai", {
+        // Get JWT token from sessionStorage
+        let token = sessionStorage.getItem("jwt_token");
+
+        // Fallback to cookie if sessionStorage is not available
+        if (!token && typeof document !== "undefined") {
+          const cookies = document.cookie.split(";");
+          const jwtCookie = cookies.find((cookie) =>
+            cookie.trim().startsWith("jwt_token=")
+          );
+          token = jwtCookie ? jwtCookie.split("=")[1] : null;
+        }
+
+        const response = await fetch(API_ENDPOINTS.chat.ai, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -95,13 +106,25 @@ export function useAIChat() {
         setIsLoading(false);
       }
     },
-    [sessionId, token]
+    [sessionId]
   );
 
   const getOrCreateSession = useCallback(
     async (topicId: string, nodeId?: string, title?: string) => {
       try {
-        const response = await fetch("/api/learning/chat/session", {
+        // Get JWT token from sessionStorage
+        let token = sessionStorage.getItem("jwt_token");
+
+        // Fallback to cookie if sessionStorage is not available
+        if (!token && typeof document !== "undefined") {
+          const cookies = document.cookie.split(";");
+          const jwtCookie = cookies.find((cookie) =>
+            cookie.trim().startsWith("jwt_token=")
+          );
+          token = jwtCookie ? jwtCookie.split("=")[1] : null;
+        }
+
+        const response = await fetch(API_ENDPOINTS.chat.session, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -129,21 +152,36 @@ export function useAIChat() {
         return null;
       }
     },
-    [token]
+    []
   );
 
   const getSessions = useCallback(
     async (topicId?: string, activeOnly = true) => {
       try {
+        // Get JWT token from sessionStorage
+        let token = sessionStorage.getItem("jwt_token");
+
+        // Fallback to cookie if sessionStorage is not available
+        if (!token && typeof document !== "undefined") {
+          const cookies = document.cookie.split(";");
+          const jwtCookie = cookies.find((cookie) =>
+            cookie.trim().startsWith("jwt_token=")
+          );
+          token = jwtCookie ? jwtCookie.split("=")[1] : null;
+        }
+
         const params = new URLSearchParams();
         if (topicId) params.set("topic_id", topicId);
         params.set("active_only", String(activeOnly));
 
-        const response = await fetch(`/api/learning/chat/sessions?${params}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await fetch(
+          `${API_ENDPOINTS.chat.sessions}?${params}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
         const data = await response.json();
 
@@ -159,7 +197,7 @@ export function useAIChat() {
         return [];
       }
     },
-    [token]
+    []
   );
 
   const resetSession = useCallback(() => {

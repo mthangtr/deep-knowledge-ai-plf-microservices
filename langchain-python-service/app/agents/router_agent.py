@@ -23,8 +23,8 @@ class ContextNeed(BaseModel):
 class RouterAgent:
     """Agent phân tích và quyết định context cần thiết"""
     
-    def __init__(self, enable_llm_analysis: bool = True):
-        self.model = "deepseek/deepseek-r1-0528:free"  # Use free model for cost efficiency
+    def __init__(self, enable_llm_analysis: bool = False):  # Default to False for stability
+        self.model = "google/gemini-2.0-flash-lite-001"  # Use working model from test
         self.enable_llm_analysis = enable_llm_analysis
         logger.info(f"Router Agent initialized with model: {self.model}, LLM analysis: {enable_llm_analysis}")
     
@@ -44,7 +44,8 @@ class RouterAgent:
             llm = LLMConfig.get_llm(
                 model_name=self.model,
                 temperature=0.1,  # Low temperature for consistent analysis
-                max_tokens=300    # Short response for faster processing
+                max_tokens=300,   # Short response for faster processing
+                enable_retry=False  # Disable retry wrapper to avoid field modification
             )
             
             # Build context from recent messages
@@ -137,6 +138,7 @@ Phân tích:"""
                 
         except Exception as e:
             logger.error(f"Router agent LLM error: {e}")
+            logger.info("Falling back to rule-based analysis")
             # Fallback to rule-based analysis
             return self._fallback_analysis(message, recent_messages)
     

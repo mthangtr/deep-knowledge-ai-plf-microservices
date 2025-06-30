@@ -450,7 +450,7 @@ router.post("/ai", authenticate, async (req: AuthRequest, res) => {
     try {
       // Call langchain-python service for AI response
       const langchainUrl =
-        process.env.LANGCHAIN_SERVICE_URL || "http://langchain-python:5000";
+        process.env.LANGCHAIN_SERVICE_URL || "http://localhost:5000";
 
       const aiResponse = await fetch(`${langchainUrl}/smart-chat`, {
         method: "POST",

@@ -16,8 +16,9 @@ class DatabaseContextManager:
     def __init__(self):
         self.router_agent = RouterAgent()
         self.db_pool: Optional[asyncpg.Pool] = None
-        self.openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        logger.info("Database Context Manager initialized")
+        # Disable OpenAI client - using OpenRouter for LLM calls
+        self.openai_client = None
+        logger.info("Database Context Manager initialized (OpenAI disabled)")
     
     async def init_db(self):
         """Initialize PostgreSQL connection pool"""
@@ -34,7 +35,8 @@ class DatabaseContextManager:
                 database_url,
                 min_size=5,
                 max_size=20,
-                command_timeout=60
+                command_timeout=60,
+                statement_cache_size=0  # Disable prepared statements for pgbouncer compatibility
             )
             logger.info("PostgreSQL connection pool created")
         except Exception as e:
@@ -54,6 +56,9 @@ class DatabaseContextManager:
         title: Optional[str] = None
     ) -> str:
         """Get existing session or create new one"""
+        if not self.db_pool:
+            raise RuntimeError("Database pool not initialized. Call init_db() first.")
+            
         async with self.db_pool.acquire() as conn:
             # Try to find active session
             session = await conn.fetchrow("""
@@ -157,7 +162,13 @@ class DatabaseContextManager:
             # Generate embedding
             embedding = await self._generate_embedding(content)
             
+            if not self.db_pool:
+                raise RuntimeError("Database pool not initialized. Call init_db() first.")
+                
             async with self.db_pool.acquire() as conn:
+                # Convert embedding list to PostgreSQL vector format
+                embedding_str = f"[{','.join(map(str, embedding))}]" if embedding else None
+                
                 # Add message
                 result = await conn.fetchrow("""
                     INSERT INTO learning_chats 
@@ -170,7 +181,7 @@ class DatabaseContextManager:
                     WHERE cs.id = $1
                     RETURNING id
                 """, session_id, user_id, content, role == "assistant",
-                    embedding, model_used, tokens_used, "recent")
+                    embedding_str, model_used, tokens_used, "recent")
                 
                 # Auto-compress if needed
                 await self._check_and_compress_session(session_id)
@@ -183,6 +194,9 @@ class DatabaseContextManager:
     
     async def _get_recent_messages_db(self, session_id: str, limit: int = 10) -> List[Dict]:
         """Get recent messages from database"""
+        if not self.db_pool:
+            return []
+            
         async with self.db_pool.acquire() as conn:
             rows = await conn.fetch("""
                 SELECT id, message, is_ai_response, created_at, tokens_used
@@ -197,6 +211,9 @@ class DatabaseContextManager:
     
     async def _get_session_summary_db(self, session_id: str) -> Optional[str]:
         """Get session summary from database"""
+        if not self.db_pool:
+            return None
+            
         async with self.db_pool.acquire() as conn:
             result = await conn.fetchrow("""
                 SELECT compressed_summary 
@@ -212,33 +229,39 @@ class DatabaseContextManager:
         query: str,
         keywords: List[str]
     ) -> List[Dict]:
-        """Real vector search with PostgreSQL pgvector"""
+        """Keyword-based search instead of vector search"""
         try:
-            # Generate embedding for query
-            query_text = f"{query} {' '.join(keywords)}"
-            query_embedding = await self._generate_embedding(query_text)
-            
+            if not self.db_pool:
+                return []
+                
+            # Use simple keyword search instead of vector search
             async with self.db_pool.acquire() as conn:
+                # Simple text search fallback
+                search_terms = [query] + keywords
+                search_query = ' | '.join(search_terms)  # OR search
+                
                 rows = await conn.fetch("""
-                    SELECT * FROM search_user_knowledge(
-                        $1::vector, $2, NULL, NULL, 0.75, 10
-                    )
-                """, query_embedding, user_id)
+                    SELECT id, message, is_ai_response, created_at, tokens_used
+                    FROM learning_chats
+                    WHERE user_id = $1 
+                    AND to_tsvector('english', message) @@ plainto_tsquery('english', $2)
+                    ORDER BY created_at DESC
+                    LIMIT 10
+                """, user_id, search_query)
                 
                 return [dict(row) for row in rows]
                 
         except Exception as e:
-            logger.error(f"Vector search error: {e}")
+            logger.error(f"Keyword search error: {e}")
             return []
     
     async def _generate_embedding(self, text: str) -> List[float]:
-        """Generate embedding using OpenAI"""
+        """Generate embedding - disabled for now to avoid API costs"""
         try:
-            response = await self.openai_client.embeddings.create(
-                model="text-embedding-3-small",
-                input=text
-            )
-            return response.data[0].embedding
+            # Temporarily disable embeddings to avoid OpenAI API costs
+            # TODO: Implement OpenRouter embeddings if needed
+            logger.info("Embedding generation disabled - using zero vector")
+            return [0.0] * 1536
         except Exception as e:
             logger.error(f"Embedding generation error: {e}")
             # Return zero vector as fallback
@@ -246,6 +269,9 @@ class DatabaseContextManager:
     
     async def _check_and_compress_session(self, session_id: str):
         """Check and compress session if too many messages"""
+        if not self.db_pool:
+            return
+        
         async with self.db_pool.acquire() as conn:
             # Get message count
             result = await conn.fetchrow("""
@@ -295,6 +321,9 @@ class DatabaseContextManager:
     
     async def get_session_stats(self, session_id: str) -> Dict[str, Any]:
         """Get session statistics from database"""
+        if not self.db_pool:
+            return {"exists": False, "error": "Database pool not initialized"}
+            
         try:
             async with self.db_pool.acquire() as conn:
                 # Check if session exists
