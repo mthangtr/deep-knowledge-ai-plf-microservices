@@ -4,6 +4,20 @@ Tổng hợp các rules đã được tối ưu cho Next.js 15 development workf
 
 ## Core Rules (Always Apply)
 
+### 0. **minimal-commands.mdc** 🔥
+
+- **"Code, don't command"** philosophy
+- Avoid unnecessary terminal commands
+- Direct implementation over exploration
+- 90% code changes, 10% commands
+
+### 0.5. **verification-flow.mdc** 🔍
+
+- **Text-only verification** for complex requests
+- Frontend → Backend → Database implementation flow
+- No code until user confirms approach
+- Clear analysis before implementation
+
 ### 1. **typescript-best.mdc**
 
 - Enforce strict TypeScript patterns
@@ -60,6 +74,8 @@ Tổng hợp các rules đã được tối ưu cho Next.js 15 development workf
 
 ### 10. **workflow-automation.mdc**
 
+- **Tool usage principles**: Code first, commands last
+- **Action before explanation**: No unnecessary delays
 - Code generation với Cursor AI
 - Snippets và templates
 - Git workflow và automation

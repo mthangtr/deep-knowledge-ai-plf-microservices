@@ -1,0 +1,127 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Verification & Implementation Flow
+
+## Question Classification
+
+### 1. **Simple Implementation** 
+- Direct code requests → Implement immediately
+- Bug fixes → Fix directly
+- Adding features with clear requirements → Code first
+
+### 2. **Complex/Ambiguous Requests** 🔍
+- Architecture decisions
+- Multiple possible approaches  
+- Breaking changes
+- Performance implications
+- **ALWAYS verify first with text-only discussion**
+
+## Verification Process
+
+### Step 1: **Text-Only Analysis**
+```
+**Phân tích yêu cầu:**
+- Hiểu vấn đề: [explain current state]
+- Đề xuất giải pháp: [propose solution]
+- Tác động: [list implications]
+- Alternatives: [other options if any]
+
+**Implementation Plan:**
+1. Frontend changes: [what will change]
+2. Backend changes: [what will change]  
+3. Database changes: [if any]
+4. Breaking changes: [if any]
+
+**Xác nhận:** Bạn có đồng ý với approach này không?
+```
+
+### Step 2: **Wait for Confirmation**
+- **NO code until user confirms**
+- **NO tools until approval**
+- Only discuss and debate
+
+### Step 3: **Implementation Flow** (after approval)
+```
+Frontend → Backend → Database → Integration
+```
+
+## Implementation Order
+
+### 1. **Frontend First**
+- UI components
+- Forms and validation
+- State management
+- API integration points
+
+### 2. **Backend Second**  
+- API routes
+- Business logic
+- Validation schemas
+- Error handling
+
+### 3. **Database Third**
+- Schema changes
+- Migrations
+- Seed data
+
+### 4. **Integration Last**
+- End-to-end testing
+- Error boundary updates
+- Documentation
+
+## Red Flags - Always Verify
+
+### Architecture Changes
+- Adding new dependencies
+- Changing folder structure
+- Modifying core patterns
+- Authentication/security changes
+
+### Breaking Changes
+- API contract changes
+- Database schema modifications
+- Component interface changes
+- Environment variable changes
+
+### Performance Impact
+- Bundle size increases
+- New external APIs
+- Heavy computations
+- Database query changes
+
+## Examples
+
+### ❌ Don't Code Immediately
+```
+User: "Tôi muốn thêm real-time chat"
+Response: *starts coding*
+```
+
+### ✅ Verify First
+```
+User: "Tôi muốn thêm real-time chat"
+
+Response: 
+**Phân tích yêu cầu:**
+- Hiện tại: Static chat với polling
+- Đề xuất: WebSocket với Socket.io
+- Tác động: New backend service, frontend connection management
+- Alternative: Server-Sent Events (simpler)
+
+**Implementation Plan:**
+1. Frontend: Chat component với real-time updates
+2. Backend: Socket.io server, message broadcasting
+3. Database: Message schema với timestamps  
+4. Integration: Connection management, error handling
+
+**Xác nhận:** Bạn có muốn dùng Socket.io hay prefer SSE?
+```
+
+## Success Metrics
+- **Clear understanding before coding**
+- **User approval for complex changes**
+- **Systematic implementation flow**
+- **No surprise breaking changes**

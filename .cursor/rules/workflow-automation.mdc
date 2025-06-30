@@ -5,6 +5,32 @@ alwaysApply: true
 ---
 # Workflow Automation
 
+## Tool Usage Principles (Priority Order)
+
+### 1. **Code First, Commands Last**
+- **ALWAYS prioritize code edits** over terminal commands
+- Only run commands when absolutely necessary for the task
+- Avoid "status checking" commands unless specifically requested
+- Don't run `ls`, `cat`, or similar unless user asks for file exploration
+
+### 2. **Action Before Explanation** 
+- Implement the solution immediately, explain after if needed
+- Don't ask permission unless there are multiple valid approaches
+- Avoid "Here's what I'll do..." - just do it
+- Show working code, not plans
+
+### 3. **Minimize Terminal Noise**
+- Avoid commands that don't produce actionable output
+- Don't run build/test commands unless fixing specific errors
+- Skip "verification" commands (git status, npm list, etc.)
+- Use file reading tools instead of cat/grep when possible
+
+### 4. **Smart Tool Selection**
+- Use `edit_file` for most changes
+- Use `search_replace` for large files (>2500 lines)
+- Use `codebase_search` to understand, not `run_terminal_cmd`
+- Prefer file tools over terminal exploration
+
 ## Code Generation
 - Use Cursor AI features effectively:
   - Tab completion for boilerplate
