@@ -160,15 +160,8 @@ async def smart_chat(request: SmartChatRequest):
         else:
             logger.info(f"Using existing session: {session_id}")
         
-        # Add user message to context
-        await db_context_manager.add_message(
-            session_id=session_id,
-            user_id=request.user_id,
-            role="user",
-            content=request.message
-        )
-        
-        # Get smart context for this message
+        # FIXED: Get context BEFORE adding current message để tránh duplicate
+        # Get smart context for this message (không bao gồm message hiện tại)
         context_package = await db_context_manager.get_context_for_message(
             session_id=session_id,
             user_id=request.user_id,
@@ -206,13 +199,13 @@ async def smart_chat(request: SmartChatRequest):
                    f"Has summary: {context_package.summary is not None}")
         logger.info(f"Final LLM context messages: {len(llm_context)}")
         
-        # Generate AI response
+        # Generate AI response với context + current message
         logger.info(f"Calling single_agent_chat with model: {request.model}")
         
         try:
             result = await orchestrator.single_agent_chat(
-                message=request.message,
-                context=llm_context,
+                message=request.message,  # Current message để process
+                context=llm_context,      # Context từ history (không chứa current message)
                 options={"model": request.model}
             )
             logger.info(f"AI response generated: {len(result['response'])} chars")
@@ -225,6 +218,14 @@ async def smart_chat(request: SmartChatRequest):
                 "processing_time": 0.1,
                 "agent_info": {"type": "fallback", "error": str(ai_error)}
             }
+        
+        # FIXED: Save user message SAU KHI đã generate AI response
+        await db_context_manager.add_message(
+            session_id=session_id,
+            user_id=request.user_id,
+            role="user",
+            content=request.message
+        )
         
         # Add AI response to context
         await db_context_manager.add_message(

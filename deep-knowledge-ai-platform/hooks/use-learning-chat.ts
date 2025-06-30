@@ -3,6 +3,13 @@ import { learningService } from "@/lib/services/learning";
 import { LearningChat } from "@/types/database";
 import { useAIChat } from "./use-ai-chat";
 
+// Debug utility for tracking message operations
+const debugLog = (operation: string, data: any) => {
+  if (process.env.NODE_ENV === "development") {
+    console.log(`🔍 [use-learning-chat] ${operation}:`, data);
+  }
+};
+
 interface UseLearningChatState {
   messages: LearningChat[];
   loading: boolean;
@@ -36,7 +43,7 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
   // Fetch messages when topic/node changes
   useEffect(() => {
     const fetchMessages = async () => {
-      if (!topicId || !chatMode) {
+      if (!topicId) {
         setState((prev) => ({
           ...prev,
           messages: [],
@@ -71,9 +78,29 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
           return;
         }
 
+        // Deduplicate messages from database (just in case)
+        const messages = response.data || [];
+        const uniqueMessages = messages.filter(
+          (msg, index, self) => index === self.findIndex((m) => m.id === msg.id)
+        );
+
+        // Sort by created_at để đảm bảo thứ tự đúng
+        uniqueMessages.sort(
+          (a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+
+        debugLog("Fetch messages completed", {
+          topicId,
+          nodeId,
+          originalCount: messages.length,
+          uniqueCount: uniqueMessages.length,
+          duplicatesFound: messages.length - uniqueMessages.length,
+        });
+
         setState((prev) => ({
           ...prev,
-          messages: response.data || [],
+          messages: uniqueMessages,
           loading: false,
           error: null,
         }));
@@ -87,15 +114,17 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
     };
 
     fetchMessages();
-  }, [topicId, nodeId, chatMode]);
+  }, [topicId, nodeId]);
 
   // Send message using new AI chat system
   const sendMessage = useCallback(
     async (params: { message: string }) => {
-      console.log(
-        ">>> [use-learning-chat] sendMessage triggered at",
-        new Date().toISOString()
-      );
+      debugLog("sendMessage triggered", {
+        topicId,
+        nodeId,
+        message: params.message,
+        timestamp: new Date().toISOString(),
+      });
 
       if (!topicId || !params.message.trim()) return;
 
@@ -131,19 +160,61 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
           // Destructure to help TypeScript understand data is not undefined
           const { user_message, ai_message } = response.data;
 
-          // Replace optimistic message with real user message and add AI response
-          setState((prev) => ({
-            ...prev,
-            messages: [
-              ...prev.messages.filter(
-                (msg) => msg.id !== optimisticUserMessage.id
-              ), // Remove optimistic
-              user_message, // Real user message from backend
-              ai_message, // AI response
-            ],
-            sending: false,
-            error: null,
-          }));
+          // Replace optimistic message với real messages từ backend
+          // Sử dụng functional update với check duplicate để tránh race condition
+          setState((prev) => {
+            // Remove optimistic message
+            const withoutOptimistic = prev.messages.filter(
+              (msg) => msg.id !== optimisticUserMessage.id
+            );
+
+            // Check if real messages already exist (race condition prevention)
+            const userExists = withoutOptimistic.some(
+              (msg) => msg.id === user_message.id
+            );
+            const aiExists = withoutOptimistic.some(
+              (msg) => msg.id === ai_message.id
+            );
+
+            debugLog("Processing API response", {
+              optimisticId: optimisticUserMessage.id,
+              userMessageId: user_message.id,
+              aiMessageId: ai_message.id,
+              userExists,
+              aiExists,
+              messagesBeforeOptimistic: withoutOptimistic.length,
+            });
+
+            const newMessages = [...withoutOptimistic];
+
+            // Only add messages if they don't exist
+            if (!userExists) {
+              newMessages.push(user_message);
+            }
+            if (!aiExists) {
+              newMessages.push(ai_message);
+            }
+
+            // Sort by created_at để đảm bảo thứ tự đúng
+            newMessages.sort(
+              (a, b) =>
+                new Date(a.created_at).getTime() -
+                new Date(b.created_at).getTime()
+            );
+
+            debugLog("State update completed", {
+              finalMessageCount: newMessages.length,
+              addedUser: !userExists,
+              addedAI: !aiExists,
+            });
+
+            return {
+              ...prev,
+              messages: newMessages,
+              sending: false,
+              error: null,
+            };
+          });
 
           return { success: true, data: response.data };
         } else {
@@ -199,12 +270,35 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
 
         if (response.success && response.data) {
           const { user_message, ai_message } = response.data;
-          setState((prev) => ({
-            ...prev,
-            messages: [user_message, ai_message],
-            sending: false,
-            error: null,
-          }));
+
+          // Sử dụng functional update với duplicate check
+          setState((prev) => {
+            const existingIds = new Set(prev.messages.map((m) => m.id));
+            const newMessages = [...prev.messages];
+
+            // Only add if not exists
+            if (!existingIds.has(user_message.id)) {
+              newMessages.push(user_message);
+            }
+            if (!existingIds.has(ai_message.id)) {
+              newMessages.push(ai_message);
+            }
+
+            // Sort by created_at
+            newMessages.sort(
+              (a, b) =>
+                new Date(a.created_at).getTime() -
+                new Date(b.created_at).getTime()
+            );
+
+            return {
+              ...prev,
+              messages: newMessages,
+              sending: false,
+              error: null,
+            };
+          });
+
           return { data: ai_message, skipped: false };
         } else {
           setState((prev) => ({
@@ -255,15 +349,35 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
         );
 
         if (response.success && response.data) {
-          // Destructure to help TypeScript understand data is not undefined
           const { user_message, ai_message } = response.data;
 
-          setState((prev) => ({
-            ...prev,
-            messages: [user_message, ai_message],
-            sending: false,
-            error: null,
-          }));
+          // Sử dụng functional update với duplicate check
+          setState((prev) => {
+            const existingIds = new Set(prev.messages.map((m) => m.id));
+            const newMessages = [...prev.messages];
+
+            // Only add if not exists
+            if (!existingIds.has(user_message.id)) {
+              newMessages.push(user_message);
+            }
+            if (!existingIds.has(ai_message.id)) {
+              newMessages.push(ai_message);
+            }
+
+            // Sort by created_at
+            newMessages.sort(
+              (a, b) =>
+                new Date(a.created_at).getTime() -
+                new Date(b.created_at).getTime()
+            );
+
+            return {
+              ...prev,
+              messages: newMessages,
+              sending: false,
+              error: null,
+            };
+          });
 
           return { data: ai_message, skipped: false };
         } else {
