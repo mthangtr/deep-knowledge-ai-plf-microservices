@@ -55,32 +55,58 @@ class DatabaseContextManager:
         node_id: Optional[str] = None,
         title: Optional[str] = None
     ) -> str:
-        """Get existing session or create new one"""
+        """Get existing session or create new one - FIXED: Proper topic/node isolation"""
         if not self.db_pool:
             raise RuntimeError("Database pool not initialized. Call init_db() first.")
             
         async with self.db_pool.acquire() as conn:
-            # Try to find active session
-            session = await conn.fetchrow("""
-                SELECT id FROM chat_sessions
-                WHERE user_id = $1 
-                AND ($2::UUID IS NULL OR topic_id = $2)
-                AND ($3::UUID IS NULL OR node_id = $3)
-                AND is_active = true
-                ORDER BY last_activity DESC
-                LIMIT 1
-            """, user_id, topic_id, node_id)
+            # FIXED: Strict matching for topic_id and node_id to prevent context bleed
+            if topic_id and node_id:
+                # Node-level session: Both topic_id and node_id must match exactly
+                session = await conn.fetchrow("""
+                    SELECT id FROM chat_sessions
+                    WHERE user_id = $1 
+                    AND topic_id = $2
+                    AND node_id = $3
+                    AND is_active = true
+                    ORDER BY last_activity DESC
+                    LIMIT 1
+                """, user_id, topic_id, node_id)
+            elif topic_id and not node_id:
+                # Topic-level session: topic_id must match, node_id must be NULL
+                session = await conn.fetchrow("""
+                    SELECT id FROM chat_sessions
+                    WHERE user_id = $1 
+                    AND topic_id = $2
+                    AND node_id IS NULL
+                    AND is_active = true
+                    ORDER BY last_activity DESC
+                    LIMIT 1
+                """, user_id, topic_id)
+            else:
+                # General session: both must be NULL
+                session = await conn.fetchrow("""
+                    SELECT id FROM chat_sessions
+                    WHERE user_id = $1 
+                    AND topic_id IS NULL
+                    AND node_id IS NULL
+                    AND is_active = true
+                    ORDER BY last_activity DESC
+                    LIMIT 1
+                """, user_id)
             
             if session:
+                logger.info(f"Found existing session: {session['id']} for topic:{topic_id}, node:{node_id}")
                 return str(session['id'])
             
-            # Create new session
+            # Create new session with proper isolation
             result = await conn.fetchrow("""
                 INSERT INTO chat_sessions (user_id, topic_id, node_id, title)
                 VALUES ($1, $2, $3, $4)
                 RETURNING id
-            """, user_id, topic_id, node_id, title or "New Chat Session")
+            """, user_id, topic_id, node_id, title or f"Chat - {topic_id or 'General'}")
             
+            logger.info(f"Created new session: {result['id']} for topic:{topic_id}, node:{node_id}")
             return str(result['id'])
     
     async def get_context_for_message(
@@ -118,12 +144,16 @@ class DatabaseContextManager:
             )
             
             if context_need.type == ContextNeedType.SMART_RETRIEVAL:
-                # Real vector search
-                relevant_messages = await self._vector_search_db(
-                    user_id, message, context_need.keywords
-                )
-                context_package.relevant = self._convert_to_messages(relevant_messages)
-                
+                # OPTIMIZED: Only search if we have enough context to warrant it
+                if len(recent_messages) > 3:  # Only search if conversation has depth
+                    relevant_messages = await self._vector_search_db(
+                        user_id, message, context_need.keywords
+                    )
+                    context_package.relevant = self._convert_to_messages(relevant_messages)
+                    logger.info(f"Retrieved {len(relevant_messages)} relevant messages")
+                else:
+                    logger.info("Skipping retrieval - not enough context history")
+            
             elif context_need.type == ContextNeedType.FULL_CONTEXT:
                 # Get session summary
                 summary = await self._get_session_summary_db(session_id)

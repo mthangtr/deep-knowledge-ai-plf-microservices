@@ -27,7 +27,7 @@ interface ChatDebatePanelProps {
 
 // Component để format AI response với markdown-style formatting
 function FormattedAIResponse({ content }: { content: string }) {
-    // Simple approach: preserve line breaks và detect tables
+    // Enhanced parsing: handle code blocks, all headers, prevent markdown leaks
     const formatContent = (text: string) => {
         const lines = text.split('\n');
         const formatted: React.ReactElement[] = [];
@@ -36,29 +36,62 @@ function FormattedAIResponse({ content }: { content: string }) {
         let tableRows: string[] = [];
         let listItems: string[] = [];
         let isInList = false;
+        let isInCodeBlock = false;
+        let codeBlockLines: string[] = [];
+        let codeLanguage = '';
 
         const flushBlock = () => {
             if (currentBlock.length > 0) {
                 const blockText = currentBlock.join('\n').trim();
                 if (blockText) {
-                    // Check if it's a header
-                    if (blockText.startsWith('###') || (blockText.startsWith('**') && blockText.endsWith('**'))) {
-                        const headerText = blockText.replace(/^###\s*/, '').replace(/^\*\*/, '').replace(/\*\*$/, '');
+                    // Check if it's a header (all levels)
+                    const headerMatch = blockText.match(/^(#{1,6})\s+(.+)$/) || blockText.match(/^\*\*(.+)\*\*$/);
+                    if (headerMatch) {
+                        const level = headerMatch[1]?.length || 2; // Default to h2 for **text**
+                        const headerText = headerMatch[2] || headerMatch[1];
+                        const sizes = ['text-[24px]', 'text-[20px]', 'text-[18px]', 'text-[16px]', 'text-[15px]', 'text-[14px]'];
+                        const margins = ['mb-6 mt-10', 'mb-5 mt-8', 'mb-4 mt-7', 'mb-4 mt-6', 'mb-3 mt-5', 'mb-3 mt-4'];
+
                         formatted.push(
-                            <h3 key={formatted.length} className="text-[17px] font-semibold mb-4 mt-6 text-primary tracking-[-0.022em] leading-[1.4]">
+                            <h3 key={formatted.length} className={`${sizes[level - 1] || sizes[1]} font-semibold ${margins[level - 1] || margins[1]} text-foreground tracking-[-0.025em] leading-[1.3]`}>
                                 {formatInlineText(headerText)}
                             </h3>
                         );
                     } else {
-                        // Regular text block - preserve line breaks with modern typography
+                        // Regular text block - better spacing and readability
                         formatted.push(
-                            <div key={formatted.length} className="mb-5 text-[15px] leading-[1.7] tracking-[-0.011em] text-foreground/90 whitespace-pre-line">
+                            <div key={formatted.length} className="mb-6 text-[15px] leading-[1.8] tracking-[-0.01em] text-foreground/90 whitespace-pre-line">
                                 {formatInlineText(blockText)}
                             </div>
                         );
                     }
                 }
                 currentBlock = [];
+            }
+        };
+
+        const flushCodeBlock = () => {
+            if (codeBlockLines.length > 0) {
+                const codeContent = codeBlockLines.join('\n');
+                formatted.push(
+                    <div key={formatted.length} className="mb-8 mt-6">
+                        <div className="bg-muted/50 border border-border/60 rounded-xl overflow-hidden shadow-sm">
+                            {codeLanguage && (
+                                <div className="px-5 py-3 bg-muted/80 border-b border-border/60 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                    {codeLanguage}
+                                </div>
+                            )}
+                            <pre className="p-5 overflow-x-auto">
+                                <code className="text-[14px] font-mono text-foreground/95 leading-[1.6] block">
+                                    {codeContent}
+                                </code>
+                            </pre>
+                        </div>
+                    </div>
+                );
+                codeBlockLines = [];
+                codeLanguage = '';
+                isInCodeBlock = false;
             }
         };
 
@@ -71,12 +104,12 @@ function FormattedAIResponse({ content }: { content: string }) {
 
                 if (rows.length > 0) {
                     formatted.push(
-                        <div key={formatted.length} className="mb-6 overflow-x-auto">
-                            <table className="min-w-full border border-border rounded-lg text-[14px]">
+                        <div key={formatted.length} className="mb-8 mt-6 overflow-x-auto">
+                            <table className="min-w-full border border-border/60 rounded-xl text-[14px] shadow-sm overflow-hidden">
                                 <thead>
-                                    <tr className="bg-muted/50">
+                                    <tr className="bg-muted/40">
                                         {rows[0].map((header, index) => (
-                                            <th key={index} className="border border-border px-4 py-3 text-left font-semibold text-foreground/95 tracking-[-0.011em]">
+                                            <th key={index} className="border-r border-border/40 last:border-r-0 px-5 py-4 text-left font-semibold text-foreground/95 tracking-[-0.01em]">
                                                 {formatInlineText(header)}
                                             </th>
                                         ))}
@@ -86,9 +119,9 @@ function FormattedAIResponse({ content }: { content: string }) {
                                     {rows.slice(1)
                                         .filter(row => !row.every(cell => cell.match(/^[-\s:]*$/))) // Filter separator lines
                                         .map((row, rowIndex) => (
-                                            <tr key={rowIndex} className="border-t border-border hover:bg-muted/20 transition-colors">
+                                            <tr key={rowIndex} className="border-t border-border/40 hover:bg-muted/20 transition-colors">
                                                 {row.map((cell, cellIndex) => (
-                                                    <td key={cellIndex} className="border border-border px-4 py-3 text-foreground/85 leading-[1.6]">
+                                                    <td key={cellIndex} className="border-r border-border/40 last:border-r-0 px-5 py-4 text-foreground/85 leading-[1.7]">
                                                         {formatInlineText(cell)}
                                                     </td>
                                                 ))}
@@ -107,10 +140,10 @@ function FormattedAIResponse({ content }: { content: string }) {
         const flushList = () => {
             if (listItems.length > 0) {
                 formatted.push(
-                    <ul key={formatted.length} className="mb-5 ml-0 space-y-2">
+                    <ul key={formatted.length} className="mb-6 ml-1 space-y-3">
                         {listItems.map((item, index) => (
-                            <li key={index} className="flex items-start text-[15px] leading-[1.7] tracking-[-0.011em] text-foreground/90">
-                                <span className="text-primary mr-3 font-medium text-[12px] leading-[1.7] mt-[2px]">•</span>
+                            <li key={index} className="flex items-start text-[15px] leading-[1.8] tracking-[-0.01em] text-foreground/90">
+                                <span className="text-primary mr-4 font-medium text-[14px] leading-[1.8] mt-[1px] flex-shrink-0">•</span>
                                 <span className="flex-1">{formatInlineText(item)}</span>
                             </li>
                         ))}
@@ -122,6 +155,29 @@ function FormattedAIResponse({ content }: { content: string }) {
         };
 
         lines.forEach((line) => {
+            const trimmedLine = line.trim();
+
+            // Code block detection (``` or ```)
+            if (trimmedLine.startsWith('```')) {
+                if (isInCodeBlock) {
+                    // End code block
+                    flushCodeBlock();
+                } else {
+                    // Start code block
+                    flushBlock();
+                    flushList();
+                    isInCodeBlock = true;
+                    codeLanguage = trimmedLine.slice(3).trim(); // Extract language
+                }
+                return;
+            }
+
+            // Inside code block - collect lines
+            if (isInCodeBlock) {
+                codeBlockLines.push(line);
+                return;
+            }
+
             // Table detection (contains |)
             if (line.includes('|') && line.trim().length > 0) {
                 if (!isInTable) {
@@ -137,22 +193,29 @@ function FormattedAIResponse({ content }: { content: string }) {
                 flushTable();
             }
 
-            const trimmedLine = line.trim();
-
-            // Skip horizontal rules (--- lines)
+            // Horizontal rules (--- lines) - render as divider
             if (trimmedLine.match(/^-{3,}$/)) {
                 flushBlock();
                 flushList();
+                formatted.push(
+                    <div key={formatted.length} className="my-10 flex items-center">
+                        <div className="flex-grow h-px bg-gradient-to-r from-transparent via-border/30 to-transparent"></div>
+                        <div className="mx-4">
+                            <div className="w-2 h-2 rounded-full bg-border/40"></div>
+                        </div>
+                        <div className="flex-grow h-px bg-gradient-to-r from-transparent via-border/30 to-transparent"></div>
+                    </div>
+                );
                 return;
             }
 
-            // List item detection (* item or - item)
-            if (trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ')) {
+            // List item detection (* item, - item, 1. item)
+            if (trimmedLine.match(/^[*-]\s/) || trimmedLine.match(/^\d+\.\s/)) {
                 flushBlock();
                 if (!isInList) {
                     isInList = true;
                 }
-                const itemText = trimmedLine.replace(/^[*-]\s*/, '');
+                const itemText = trimmedLine.replace(/^[*-]\s*/, '').replace(/^\d+\.\s*/, '');
                 listItems.push(itemText);
                 return;
             }
@@ -167,7 +230,7 @@ function FormattedAIResponse({ content }: { content: string }) {
                 flushBlock();
                 // Add spacing for empty lines
                 if (formatted.length > 0) {
-                    formatted.push(<div key={formatted.length} className="mb-2" />);
+                    formatted.push(<div key={formatted.length} className="mb-4" />);
                 }
                 return;
             }
@@ -177,6 +240,7 @@ function FormattedAIResponse({ content }: { content: string }) {
         });
 
         // Flush remaining content
+        flushCodeBlock();
         flushTable();
         flushList();
         flushBlock();
@@ -184,20 +248,23 @@ function FormattedAIResponse({ content }: { content: string }) {
         return formatted;
     };
 
-    // Format inline text với bold, italic, etc.
+    // Format inline text với bold, italic, code - enhanced to prevent markdown leaks
     const formatInlineText = (text: string) => {
         // Replace **text** với bold
-        text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        // Replace *text* với italic  
-        text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        text = text.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>');
+        // Replace *text* với italic (but not ** patterns)
+        text = text.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em class="italic text-foreground/95">$1</em>');
         // Replace `code` với inline code with better styling
-        text = text.replace(/`(.*?)`/g, '<code class="bg-muted px-1.5 py-0.5 rounded-md text-[13px] font-mono text-foreground/95 border border-border/50">$1</code>');
+        text = text.replace(/`(.*?)`/g, '<code class="bg-muted/60 px-2 py-1 rounded-md text-[14px] font-mono text-foreground/95 border border-border/40">$1</code>');
+        // Clean up any remaining markdown artifacts
+        text = text.replace(/#{1,6}\s*/g, ''); // Remove header markers
+        text = text.replace(/^\s*[-*+]\s*/gm, ''); // Remove list markers
 
         return <span dangerouslySetInnerHTML={{ __html: text }} />;
     };
 
     return (
-        <div className="space-y-1 font-inter">
+        <div className="space-y-2 font-inter">
             {formatContent(content)}
         </div>
     );

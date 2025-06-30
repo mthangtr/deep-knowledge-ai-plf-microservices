@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from app.models.llm_config import LLMConfig
 from app.agents.multi_agent import MultiAgentOrchestrator
 from app.agents.db_context_manager import DatabaseContextManager
+from app.agents.router_agent import ContextNeedType
 
 load_dotenv()
 
@@ -143,17 +144,21 @@ async def smart_chat(request: SmartChatRequest):
         logger.info(f"Smart chat - User: {request.user_id}, Session: {request.session_id}")
         logger.info(f"Message: {request.message[:100]}...")
         
-        # Get or create session
+        # FIXED: Always validate session for topic/node isolation
+        # Let database logic handle proper session isolation instead of blindly reusing frontend session_id
+        session_id = await db_context_manager.get_or_create_session(
+            user_id=request.user_id,
+            topic_id=request.topic_id,
+            node_id=request.node_id,
+            title=f"Chat - {request.message[:50]}..."
+        )
+        
         if not request.session_id:
-            session_id = await db_context_manager.get_or_create_session(
-                user_id=request.user_id,
-                topic_id=request.topic_id,
-                node_id=request.node_id,
-                title=f"Chat - {request.message[:50]}..."
-            )
             logger.info(f"Created new session: {session_id}")
+        elif request.session_id != session_id:
+            logger.info(f"Switched to proper session: {session_id} (was: {request.session_id})")
         else:
-            session_id = request.session_id
+            logger.info(f"Using existing session: {session_id}")
         
         # Add user message to context
         await db_context_manager.add_message(
@@ -170,33 +175,39 @@ async def smart_chat(request: SmartChatRequest):
             message=request.message
         )
         
-        # Build context for LLM
+        # Build context for LLM - OPTIMIZED: Smart context building
         llm_context = []
         
-        # Add summary if available
-        if context_package.summary:
-            llm_context.insert(0, {
-                "role": "system",
-                "content": f"Tóm tắt cuộc hội thoại trước: {context_package.summary}"
-            })
-        
-        # Add recent messages
+        # Add recent messages (always include)
         for msg in context_package.recent:
             llm_context.append({
                 "role": msg.role,
                 "content": msg.content
             })
         
-        # Add relevant historical messages
-        for msg in context_package.relevant:
-            llm_context.append({
-                "role": msg.role,
-                "content": f"[Relevant from history] {msg.content}"
+        # Only add summary if we have many messages to avoid token waste
+        if context_package.summary and len(context_package.recent) > 5:
+            llm_context.insert(0, {
+                "role": "system",
+                "content": f"Tóm tắt cuộc hội thoại trước: {context_package.summary}"
             })
+        
+        # Only add relevant messages if context type requires it
+        if context_package.context_type == ContextNeedType.SMART_RETRIEVAL:
+            for msg in context_package.relevant[:3]:  # Limit to 3 most relevant
+                llm_context.append({
+                    "role": msg.role,
+                    "content": f"[Relevant] {msg.content}"
+                })
+        
+        # FIXED: Better logging to understand context composition
+        logger.info(f"Context built - Recent: {len(context_package.recent)}, "
+                   f"Relevant: {len(context_package.relevant)}, "
+                   f"Has summary: {context_package.summary is not None}")
+        logger.info(f"Final LLM context messages: {len(llm_context)}")
         
         # Generate AI response
         logger.info(f"Calling single_agent_chat with model: {request.model}")
-        logger.info(f"Context messages count: {len(llm_context)}")
         
         try:
             result = await orchestrator.single_agent_chat(
