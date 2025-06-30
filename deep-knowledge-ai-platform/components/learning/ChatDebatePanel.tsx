@@ -17,255 +17,76 @@ import {
     MessageSquare
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface ChatDebatePanelProps {
     selectedTopic: LearningTopic | null;
     messages: ChatMessage[];
     onSendMessage: (content: string) => void;
     onAddToNotes: (messageId: string) => void;
+    sending?: boolean;
 }
 
 // Component để format AI response với markdown-style formatting
 function FormattedAIResponse({ content }: { content: string }) {
-    // Enhanced parsing: handle code blocks, all headers, prevent markdown leaks
-    const formatContent = (text: string) => {
-        const lines = text.split('\n');
-        const formatted: React.ReactElement[] = [];
-        let currentBlock: string[] = [];
-        let isInTable = false;
-        let tableRows: string[] = [];
-        let listItems: string[] = [];
-        let isInList = false;
-        let isInCodeBlock = false;
-        let codeBlockLines: string[] = [];
-        let codeLanguage = '';
-
-        const flushBlock = () => {
-            if (currentBlock.length > 0) {
-                const blockText = currentBlock.join('\n').trim();
-                if (blockText) {
-                    // Check if it's a header (all levels)
-                    const headerMatch = blockText.match(/^(#{1,6})\s+(.+)$/) || blockText.match(/^\*\*(.+)\*\*$/);
-                    if (headerMatch) {
-                        const level = headerMatch[1]?.length || 2; // Default to h2 for **text**
-                        const headerText = headerMatch[2] || headerMatch[1];
-                        const sizes = ['text-[24px]', 'text-[20px]', 'text-[18px]', 'text-[16px]', 'text-[15px]', 'text-[14px]'];
-                        const margins = ['mb-6 mt-10', 'mb-5 mt-8', 'mb-4 mt-7', 'mb-4 mt-6', 'mb-3 mt-5', 'mb-3 mt-4'];
-
-                        formatted.push(
-                            <h3 key={formatted.length} className={`${sizes[level - 1] || sizes[1]} font-semibold ${margins[level - 1] || margins[1]} text-foreground tracking-[-0.025em] leading-[1.3]`}>
-                                {formatInlineText(headerText)}
-                            </h3>
-                        );
-                    } else {
-                        // Regular text block - better spacing and readability
-                        formatted.push(
-                            <div key={formatted.length} className="mb-6 text-[15px] leading-[1.8] tracking-[-0.01em] text-foreground/90 whitespace-pre-line">
-                                {formatInlineText(blockText)}
-                            </div>
-                        );
-                    }
-                }
-                currentBlock = [];
-            }
-        };
-
-        const flushCodeBlock = () => {
-            if (codeBlockLines.length > 0) {
-                const codeContent = codeBlockLines.join('\n');
-                formatted.push(
-                    <div key={formatted.length} className="mb-8 mt-6">
-                        <div className="bg-muted/50 border border-border/60 rounded-xl overflow-hidden shadow-sm">
-                            {codeLanguage && (
-                                <div className="px-5 py-3 bg-muted/80 border-b border-border/60 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                                    {codeLanguage}
-                                </div>
-                            )}
-                            <pre className="p-5 overflow-x-auto">
-                                <code className="text-[14px] font-mono text-foreground/95 leading-[1.6] block">
-                                    {codeContent}
-                                </code>
-                            </pre>
-                        </div>
-                    </div>
-                );
-                codeBlockLines = [];
-                codeLanguage = '';
-                isInCodeBlock = false;
-            }
-        };
-
-        const flushTable = () => {
-            if (tableRows.length > 0) {
-                // Parse table rows
-                const rows = tableRows.map(row =>
-                    row.split('|').map(cell => cell.trim()).filter(cell => cell)
-                );
-
-                if (rows.length > 0) {
-                    formatted.push(
-                        <div key={formatted.length} className="mb-8 mt-6 overflow-x-auto">
-                            <table className="min-w-full border border-border/60 rounded-xl text-[14px] shadow-sm overflow-hidden">
-                                <thead>
-                                    <tr className="bg-muted/40">
-                                        {rows[0].map((header, index) => (
-                                            <th key={index} className="border-r border-border/40 last:border-r-0 px-5 py-4 text-left font-semibold text-foreground/95 tracking-[-0.01em]">
-                                                {formatInlineText(header)}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {rows.slice(1)
-                                        .filter(row => !row.every(cell => cell.match(/^[-\s:]*$/))) // Filter separator lines
-                                        .map((row, rowIndex) => (
-                                            <tr key={rowIndex} className="border-t border-border/40 hover:bg-muted/20 transition-colors">
-                                                {row.map((cell, cellIndex) => (
-                                                    <td key={cellIndex} className="border-r border-border/40 last:border-r-0 px-5 py-4 text-foreground/85 leading-[1.7]">
-                                                        {formatInlineText(cell)}
-                                                    </td>
-                                                ))}
-                                            </tr>
-                                        ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    );
-                }
-                tableRows = [];
-                isInTable = false;
-            }
-        };
-
-        const flushList = () => {
-            if (listItems.length > 0) {
-                formatted.push(
-                    <ul key={formatted.length} className="mb-6 ml-1 space-y-3">
-                        {listItems.map((item, index) => (
-                            <li key={index} className="flex items-start text-[15px] leading-[1.8] tracking-[-0.01em] text-foreground/90">
-                                <span className="text-primary mr-4 font-medium text-[14px] leading-[1.8] mt-[1px] flex-shrink-0">•</span>
-                                <span className="flex-1">{formatInlineText(item)}</span>
-                            </li>
-                        ))}
-                    </ul>
-                );
-                listItems = [];
-                isInList = false;
-            }
-        };
-
-        lines.forEach((line) => {
-            const trimmedLine = line.trim();
-
-            // Code block detection (``` or ```)
-            if (trimmedLine.startsWith('```')) {
-                if (isInCodeBlock) {
-                    // End code block
-                    flushCodeBlock();
-                } else {
-                    // Start code block
-                    flushBlock();
-                    flushList();
-                    isInCodeBlock = true;
-                    codeLanguage = trimmedLine.slice(3).trim(); // Extract language
-                }
-                return;
-            }
-
-            // Inside code block - collect lines
-            if (isInCodeBlock) {
-                codeBlockLines.push(line);
-                return;
-            }
-
-            // Table detection (contains |)
-            if (line.includes('|') && line.trim().length > 0) {
-                if (!isInTable) {
-                    flushBlock();
-                    isInTable = true;
-                }
-                tableRows.push(line);
-                return;
-            }
-
-            // End table if we were in one
-            if (isInTable) {
-                flushTable();
-            }
-
-            // Horizontal rules (--- lines) - render as divider
-            if (trimmedLine.match(/^-{3,}$/)) {
-                flushBlock();
-                flushList();
-                formatted.push(
-                    <div key={formatted.length} className="my-10 flex items-center">
-                        <div className="flex-grow h-px bg-gradient-to-r from-transparent via-border/30 to-transparent"></div>
-                        <div className="mx-4">
-                            <div className="w-2 h-2 rounded-full bg-border/40"></div>
-                        </div>
-                        <div className="flex-grow h-px bg-gradient-to-r from-transparent via-border/30 to-transparent"></div>
-                    </div>
-                );
-                return;
-            }
-
-            // List item detection (* item, - item, 1. item)
-            if (trimmedLine.match(/^[*-]\s/) || trimmedLine.match(/^\d+\.\s/)) {
-                flushBlock();
-                if (!isInList) {
-                    isInList = true;
-                }
-                const itemText = trimmedLine.replace(/^[*-]\s*/, '').replace(/^\d+\.\s*/, '');
-                listItems.push(itemText);
-                return;
-            }
-
-            // End list if we were in one
-            if (isInList) {
-                flushList();
-            }
-
-            // Empty line - end current block
-            if (trimmedLine === '') {
-                flushBlock();
-                // Add spacing for empty lines
-                if (formatted.length > 0) {
-                    formatted.push(<div key={formatted.length} className="mb-4" />);
-                }
-                return;
-            }
-
-            // Add to current block
-            currentBlock.push(line);
-        });
-
-        // Flush remaining content
-        flushCodeBlock();
-        flushTable();
-        flushList();
-        flushBlock();
-
-        return formatted;
-    };
-
-    // Format inline text với bold, italic, code - enhanced to prevent markdown leaks
-    const formatInlineText = (text: string) => {
-        // Replace **text** với bold
-        text = text.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>');
-        // Replace *text* với italic (but not ** patterns)
-        text = text.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em class="italic text-foreground/95">$1</em>');
-        // Replace `code` với inline code with better styling
-        text = text.replace(/`(.*?)`/g, '<code class="bg-muted/60 px-2 py-1 rounded-md text-[14px] font-mono text-foreground/95 border border-border/40">$1</code>');
-        // Clean up any remaining markdown artifacts
-        text = text.replace(/#{1,6}\s*/g, ''); // Remove header markers
-        text = text.replace(/^\s*[-*+]\s*/gm, ''); // Remove list markers
-
-        return <span dangerouslySetInnerHTML={{ __html: text }} />;
-    };
-
     return (
-        <div className="space-y-2 font-inter">
-            {formatContent(content)}
+        <div className="font-inter text-foreground antialiased prose prose-sm dark:prose-invert max-w-none">
+            <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                    h1: ({ node, ...props }) => <h1 className="text-3xl font-semibold mt-10 mb-5 tracking-tight text-foreground" {...props} />,
+                    h2: ({ node, ...props }) => <h2 className="text-2xl font-semibold mt-8 mb-4 tracking-tight text-foreground" {...props} />,
+                    h3: ({ node, ...props }) => <h3 className="text-xl font-semibold mt-6 mb-3 tracking-tight text-foreground" {...props} />,
+                    h4: ({ node, ...props }) => <h4 className="text-lg font-semibold mt-4 mb-2 text-foreground" {...props} />,
+                    p: ({ node, ...props }) => <p className="mb-4" {...props} />,
+                    ul: ({ node, ...props }) => <ul className="list-disc space-y-2 pl-6 mb-4" {...props} />,
+                    ol: ({ node, ...props }) => <ol className="list-decimal space-y-2 pl-6 mb-4" {...props} />,
+                    li: ({ node, ...props }) => <li className="pl-2" {...props} />,
+                    code({ node, className, children, ...props }) {
+                        const inline = !className?.includes('language-');
+                        const match = /language-(\w+)/.exec(className || '')
+                        return !inline && match ? (
+                            <div className="my-4 rounded-lg overflow-hidden bg-[#282c34] shadow-md">
+                                <div className="bg-gray-800 text-white text-xs px-3 py-1 rounded-t-md flex justify-between items-center">
+                                    <span>{match[1]}</span>
+                                    <button
+                                        onClick={() => navigator.clipboard.writeText(String(children))}
+                                        className="text-xs inline-flex items-center gap-1 opacity-60 hover:opacity-100 transition"
+                                    >
+                                        <Copy className="h-3 w-3" />
+                                        Copy
+                                    </button>
+                                </div>
+                                <SyntaxHighlighter
+                                    style={oneDark as any}
+                                    language={match[1]}
+                                    PreTag="div"
+                                    customStyle={{ margin: 0, padding: '1.25rem', backgroundColor: 'transparent' }}
+                                >
+                                    {String(children).replace(/\n$/, '')}
+                                </SyntaxHighlighter>
+                            </div>
+                        ) : (
+                            <code className="bg-muted/60 px-1.5 py-1 rounded-md text-sm font-mono text-foreground" {...props}>
+                                {children}
+                            </code>
+                        )
+                    },
+                    table: ({ node, ...props }) => <div className="my-6 overflow-x-auto"><table className="w-full text-sm border-collapse" {...props} /></div>,
+                    thead: ({ node, ...props }) => <thead className="border-b border-border/60" {...props} />,
+                    th: ({ node, ...props }) => <th className="px-4 py-3 text-left font-semibold text-foreground" {...props} />,
+                    tr: ({ node, ...props }) => <tr className="border-t border-border/40" {...props} />,
+                    td: ({ node, ...props }) => <td className="px-4 py-3" {...props} />,
+                    strong: ({ node, ...props }) => <strong className="font-semibold text-foreground" {...props} />,
+                    em: ({ node, ...props }) => <em className="italic" {...props} />,
+                    hr: ({ node, ...props }) => <hr className="my-8 border-border/40" {...props} />,
+                }}
+            >
+                {content}
+            </ReactMarkdown>
         </div>
     );
 }
@@ -274,10 +95,10 @@ export function ChatDebatePanel({
     selectedTopic,
     messages,
     onSendMessage,
-    onAddToNotes
+    onAddToNotes,
+    sending = false
 }: ChatDebatePanelProps) {
     const [inputValue, setInputValue] = useState('');
-    const [isTyping, setIsTyping] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -291,14 +112,10 @@ export function ChatDebatePanel({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!inputValue.trim() || !selectedTopic) return;
+        if (!inputValue.trim() || !selectedTopic || sending) return;
 
         onSendMessage(inputValue.trim());
         setInputValue('');
-        setIsTyping(true);
-
-        // Simulate typing indicator
-        setTimeout(() => setIsTyping(false), 1500);
     };
 
     const handleCopyMessage = (content: string) => {
@@ -416,9 +233,7 @@ export function ChatDebatePanel({
                                     ) : (
                                         /* Mentor Message - Modern Typography with Inter Font */
                                         <div className="w-full space-y-3">
-                                            <div className="font-inter text-foreground antialiased">
-                                                <FormattedAIResponse content={message.content} />
-                                            </div>
+                                            <FormattedAIResponse content={message.content} />
                                         </div>
                                     )}
 
@@ -471,7 +286,7 @@ export function ChatDebatePanel({
                     )}
 
                     {/* Typing Indicator - Modern style */}
-                    {isTyping && (
+                    {sending && (
                         <div className="flex gap-4">
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center flex-shrink-0">
                                 <GraduationCap className="h-4 w-4 text-primary-foreground" />
@@ -501,14 +316,14 @@ export function ChatDebatePanel({
                                 onChange={(e) => setInputValue(e.target.value)}
                                 placeholder={`Gửi tin nhắn...`}
                                 className="rounded-2xl bg-muted/50 border-0 focus:ring-2 focus:ring-primary/20 focus:bg-background pr-12 py-3 text-sm resize-none min-h-[44px]"
-                                disabled={isTyping}
+                                disabled={sending}
                             />
                         </div>
                         <Button
                             type="submit"
                             size="icon"
                             className="rounded-full h-11 w-11 shadow-sm"
-                            disabled={!inputValue.trim() || isTyping}
+                            disabled={!inputValue.trim() || sending}
                         >
                             <Send className="h-4 w-4" />
                         </Button>

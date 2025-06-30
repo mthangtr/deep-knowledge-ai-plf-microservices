@@ -293,6 +293,7 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
                 messages={formattedMessages}
                 onSendMessage={handleSendMessage}
                 onAddToNotes={handleAddToNotes}
+                sending={chatSending}
             />
         );
     };

@@ -90,10 +90,28 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
     async (params: { message: string }) => {
       if (!topicId || !params.message.trim()) return;
 
-      setState((prev) => ({ ...prev, sending: true, error: null }));
+      // Create optimistic user message immediately
+      const optimisticUserMessage: LearningChat = {
+        id: `temp-user-${Date.now()}`, // Temporary ID
+        topic_id: topicId,
+        node_id: nodeId,
+        user_id: "current", // Will be replaced by real user_id from backend
+        message: params.message.trim(),
+        is_ai_response: false,
+        message_type: "normal",
+        created_at: new Date().toISOString(),
+      };
+
+      // Add user message to state immediately (optimistic update)
+      setState((prev) => ({
+        ...prev,
+        messages: [...prev.messages, optimisticUserMessage],
+        sending: true,
+        error: null,
+      }));
 
       try {
-        // Use new AI chat system
+        // Call AI service
         const response = await aiChat.sendMessage(
           params.message,
           topicId,
@@ -101,31 +119,43 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
         );
 
         if (response.success && response.data) {
-          // Add both user and AI messages to state
-          const newMessages = [
-            response.data.user_message,
-            response.data.ai_message,
-          ];
+          // Destructure to help TypeScript understand data is not undefined
+          const { user_message, ai_message } = response.data;
 
+          // Replace optimistic message with real user message and add AI response
           setState((prev) => ({
             ...prev,
-            messages: [...prev.messages, ...newMessages],
+            messages: [
+              ...prev.messages.filter(
+                (msg) => msg.id !== optimisticUserMessage.id
+              ), // Remove optimistic
+              user_message, // Real user message from backend
+              ai_message, // AI response
+            ],
             sending: false,
             error: null,
           }));
 
           return { success: true, data: response.data };
         } else {
+          // Remove optimistic message on error
           setState((prev) => ({
             ...prev,
+            messages: prev.messages.filter(
+              (msg) => msg.id !== optimisticUserMessage.id
+            ),
             sending: false,
             error: response.error || "Lỗi khi gửi tin nhắn",
           }));
           return { error: response.error };
         }
       } catch (error) {
+        // Remove optimistic message on error
         setState((prev) => ({
           ...prev,
+          messages: prev.messages.filter(
+            (msg) => msg.id !== optimisticUserMessage.id
+          ),
           sending: false,
           error: "Lỗi kết nối khi gửi tin nhắn",
         }));
@@ -163,14 +193,17 @@ Hãy bắt đầu bằng cách hỏi tôi bất kỳ điều gì về chủ đ�
         );
 
         if (response.success && response.data) {
+          // Destructure to help TypeScript understand data is not undefined
+          const { user_message, ai_message } = response.data;
+
           setState((prev) => ({
             ...prev,
-            messages: [response.data.user_message, response.data.ai_message],
+            messages: [user_message, ai_message],
             sending: false,
             error: null,
           }));
 
-          return { data: response.data.ai_message, skipped: false };
+          return { data: ai_message, skipped: false };
         } else {
           setState((prev) => ({
             ...prev,
@@ -215,14 +248,17 @@ Hãy bắt đầu bằng cách hỏi tôi bất kỳ điều gì về chủ đ�
         );
 
         if (response.success && response.data) {
+          // Destructure to help TypeScript understand data is not undefined
+          const { user_message, ai_message } = response.data;
+
           setState((prev) => ({
             ...prev,
-            messages: [response.data.user_message, response.data.ai_message],
+            messages: [user_message, ai_message],
             sending: false,
             error: null,
           }));
 
-          return { data: response.data.ai_message, skipped: false };
+          return { data: ai_message, skipped: false };
         } else {
           setState((prev) => ({
             ...prev,

@@ -1,12 +1,6 @@
 import { useState, useCallback } from "react";
 import { API_ENDPOINTS } from "@/lib/config";
-
-interface AIMessage {
-  id: string;
-  message: string;
-  is_ai_response: boolean;
-  created_at: string;
-}
+import { LearningChat } from "@/types/database";
 
 interface AISessionInfo {
   session_id: string;
@@ -19,8 +13,8 @@ interface AISessionInfo {
 interface SendMessageResponse {
   success: boolean;
   data?: {
-    user_message: AIMessage;
-    ai_message: AIMessage;
+    user_message: LearningChat;
+    ai_message: LearningChat;
     session_id: string;
     context_info: {
       context_type: string;
