@@ -34,6 +34,12 @@ LEVEL_3_KEYWORDS = [
     "lên kế hoạch", "xây dựng chiến lược", "giải bài toán", "chứng minh", "suy luận"
 ]
 
+# Keywords to force the highest tier model, overriding other logic
+FORCE_LEVEL_3_KEYWORDS = [
+    "dùng model mạnh nhất", "phân tích kỹ", "suy luận sâu", "deep analysis",
+    "nghiên cứu sâu", "expert analysis", "think step-by-step in detail"
+]
+
 
 # ==============================================================================
 # MODEL STRATEGY MATRIX
@@ -42,18 +48,18 @@ LEVEL_3_KEYWORDS = [
 
 MODEL_STRATEGY = {
     Domain.PROGRAMMING: {
-        ModelTier.LEVEL_1: "openai/gpt-4o-mini",
+        ModelTier.LEVEL_1: "google/gemini-2.0-flash-lite-001",
         ModelTier.LEVEL_2: "google/gemini-2.5-flash",
-        ModelTier.LEVEL_3: "anthropic/claude-3-sonnet-20240229"
+        ModelTier.LEVEL_3: "deepseek/deepseek-r1-0528:free"
     },
     Domain.SCIENCE: {
-        ModelTier.LEVEL_1: "openai/gpt-4o-mini",
+        ModelTier.LEVEL_1: "google/gemini-2.0-flash-lite-001",
         ModelTier.LEVEL_2: "google/gemini-2.5-flash",
         ModelTier.LEVEL_3: "google/gemini-2.5-pro"
     },
     Domain.DEFAULT: {
-        ModelTier.LEVEL_1: "openai/gpt-4o-mini",
+        ModelTier.LEVEL_1: "google/gemini-2.0-flash-lite-001",
         ModelTier.LEVEL_2: "google/gemini-2.5-flash",
-        ModelTier.LEVEL_3: "anthropic/claude-3-sonnet-20240229"
+        ModelTier.LEVEL_3: "deepseek/deepseek-r1-0528:free"
     }
 } 

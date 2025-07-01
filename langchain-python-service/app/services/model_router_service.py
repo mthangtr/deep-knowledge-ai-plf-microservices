@@ -8,6 +8,7 @@ from app.config.model_router_config import (
     DOMAIN_KEYWORDS,
     LEVEL_2_KEYWORDS,
     LEVEL_3_KEYWORDS,
+    FORCE_LEVEL_3_KEYWORDS,
     MODEL_STRATEGY
 )
 
@@ -32,11 +33,15 @@ class ModelRouterService:
         """Determines the complexity tier based on the user's message."""
         msg_lower = user_message.lower()
 
-        # Check for Level 3 first, as its keywords are more specific.
+        # Priority 1: Check for keywords that force the highest tier.
+        if any(keyword in msg_lower for keyword in FORCE_LEVEL_3_KEYWORDS):
+            return ModelTier.LEVEL_3
+
+        # Priority 2: Check for Level 3 keywords.
         if any(keyword in msg_lower for keyword in LEVEL_3_KEYWORDS):
             return ModelTier.LEVEL_3
 
-        # Then check for Level 2.
+        # Priority 3: Check for Level 2.
         if any(keyword in msg_lower for keyword in LEVEL_2_KEYWORDS):
             return ModelTier.LEVEL_2
             

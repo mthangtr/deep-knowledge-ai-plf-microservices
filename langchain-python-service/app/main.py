@@ -10,12 +10,13 @@ from datetime import datetime
 from dotenv import load_dotenv
 from loguru import logger
 from contextlib import asynccontextmanager
+import re
 
 from app.models.llm_config import LLMConfig
 from app.agents.multi_agent import MultiAgentOrchestrator
 from app.agents.db_context_manager import DatabaseContextManager
 from app.prompts.core_prompts import MASTER_SYSTEM_PROMPT
-from app.prompts.personas import SOCRATIC_MENTOR, CREATIVE_EXPLORER, PRAGMATIC_ENGINEER
+from app.prompts.personas import SOCRATIC_MENTOR, CREATIVE_EXPLORER, PRAGMATIC_ENGINEER, DIRECT_INSTRUCTOR
 from app.services.model_router_service import model_router
 from app.services.cache_manager import cache_manager
 
@@ -111,6 +112,28 @@ def serialize_datetime_objects(obj):
     else:
         return obj
 
+# --- Helper Function for Relevance Check ---
+def _calculate_relevance_score(user_message: str, structural_context: Optional[str]) -> float:
+    """Calculates a relevance score between the user message and the topic context."""
+    if not structural_context or not user_message:
+        return 1.0  # Assume relevant if no context to compare against
+
+    # Simple keyword extraction (words with 4+ chars)
+    def extract_keywords(text: str) -> set:
+        return set(re.findall(r'\b\w{4,}\b', text.lower()))
+
+    message_keywords = extract_keywords(user_message)
+    context_keywords = extract_keywords(structural_context)
+
+    if not message_keywords or not context_keywords:
+        return 0.0 # No common ground
+
+    # Jaccard Similarity
+    intersection = len(message_keywords.intersection(context_keywords))
+    union = len(message_keywords.union(context_keywords))
+
+    return intersection / union if union > 0 else 0.0
+
 @app.get("/")
 async def root():
     return {
@@ -199,27 +222,96 @@ async def smart_chat(request: SmartChatRequest):
                 [f"{msg.role}: {msg.content}" for msg in context_package.recent]
             )
 
-            # --- PERSONA ENGINE ---
-            user_message_lower = request.message.lower()
-            selected_persona = SOCRATIC_MENTOR  # Default
-            persona_name = "Socratic Mentor"
+            # --- Relevance Analysis ---
+            relevance_score = _calculate_relevance_score(
+                request.message,
+                context_package.structural_context
+            )
+            
+            relevance_guidance = ""
+            topic_title = context_package.topic_title or "chủ đề hiện tại"
 
-            if "giải thích đơn giản" in user_message_lower or "ví dụ vui" in user_message_lower or "thú vị" in user_message_lower:
-                selected_persona = CREATIVE_EXPLORER
-                persona_name = "Creative Explorer"
-            elif "lỗi" in user_message_lower or "tối ưu" in user_message_lower or "step-by-step" in user_message_lower or "cụ thể" in user_message_lower:
-                selected_persona = PRAGMATIC_ENGINEER
-                persona_name = "Pragmatic Engineer"
+            if relevance_score <= 0.1:
+                relevance_guidance = (
+                    f"Cảnh báo: Câu hỏi này có vẻ không liên quan đến chủ đề chính là '{topic_title}'. "
+                    "Trước khi trả lời, hãy lịch sự hỏi lại người dùng xem họ có muốn tiếp tục với câu hỏi này không "
+                    "hay muốn quay lại chủ đề chính. Hãy đề xuất hai lựa chọn rõ ràng."
+                )
+            elif relevance_score <= 0.4:
+                relevance_guidance = (
+                    f"Lưu ý: Câu hỏi này có vẻ liên quan một phần đến chủ đề chính. "
+                    f"Hãy cố gắng trả lời câu hỏi của người dùng và kết nối nó trở lại với chủ đề đang học là '{topic_title}' "
+                    "để mở rộng tư duy."
+                )
+            
+            logger.info(f"Relevance Score: {relevance_score:.2f}. Guidance: {'Provided' if relevance_guidance else 'None'}")
+
+            # --- PERSONA ENGINE (ENHANCED) ---
+            user_message_lower = request.message.lower()
+
+            # Keywords for forcing a direct, non-Socratic answer
+            direct_request_keywords = [
+                "tôi không biết", "chưa bao giờ nghe", "muốn đi thẳng vào vấn đề",
+                "giải thích trực tiếp", "đừng hỏi nữa", "cứ trả lời đi", "tôi không hiểu gì",
+                "hãy nói về", "cho tôi biết về"
+            ]
+
+            selected_persona = None
+            persona_name = ""
+
+            # 1. Prioritize direct requests to override default Socratic method
+            if any(keyword in user_message_lower for keyword in direct_request_keywords):
+                selected_persona = DIRECT_INSTRUCTOR
+                persona_name = "Direct Instructor"
+            
+            # 2. If not a direct request, check for other persona triggers
+            if not selected_persona:
+                creative_keywords = [
+                    "giải thích đơn giản", "ví dụ vui", "thú vị", "một cách sáng tạo",
+                    "như thể là", "ví như", "giống như là", "cho người không biết gì"
+                ]
+                pragmatic_keywords = [
+                    "lỗi", "tối ưu", "step-by-step", "cụ thể", "hướng dẫn chi tiết",
+                    "thực hành", "triển khai"
+                ]
+
+                if any(keyword in user_message_lower for keyword in creative_keywords):
+                    selected_persona = CREATIVE_EXPLORER
+                    persona_name = "Creative Explorer"
+                elif any(keyword in user_message_lower for keyword in pragmatic_keywords):
+                    selected_persona = PRAGMATIC_ENGINEER
+                    persona_name = "Pragmatic Engineer"
+                else:
+                    # 3. Fallback to the default Socratic Mentor
+                    selected_persona = SOCRATIC_MENTOR
+                    persona_name = "Socratic Mentor"
             
             logger.info(f"Persona selected: {persona_name}")
+
+            # --- Output Style Analysis ---
+            output_style_guidance = "Hãy trả lời một cách tự nhiên với độ dài phù hợp." # Default
+            
+            concise_keywords = ["ngắn gọn", "tóm tắt", "ý chính", "câu trả lời ngắn"]
+            detailed_keywords = ["chi tiết", "giải thích sâu", "cặn kẽ", "dài hơn"]
+            refresh_keywords = ["giải thích lại", "nói cách khác", "theo cách khác", "ví dụ khác"]
+
+            if any(keyword in user_message_lower for keyword in concise_keywords):
+                output_style_guidance = "Chỉ dẫn: Hãy trả lời một cách cực kỳ súc tích, tập trung vào điểm chính, không quá 3 câu."
+            elif any(keyword in user_message_lower for keyword in detailed_keywords):
+                output_style_guidance = "Chỉ dẫn: Hãy giải thích một cách chi tiết và cặn kẽ, bao gồm các ví dụ và ngữ cảnh liên quan nếu có thể."
+            elif any(keyword in user_message_lower for keyword in refresh_keywords):
+                output_style_guidance = "Chỉ dẫn quan trọng: Người dùng đã nghe giải thích về chủ đề này. Hãy trình bày lại vấn đề bằng một góc nhìn hoặc ví dụ hoàn toàn mới. Tuyệt đối không lặp lại nội dung đã nói."
+
             
             # Format the master system prompt
             system_prompt = MASTER_SYSTEM_PROMPT.format(
                 persona_description=selected_persona,
-                topic_context=context_package.structural_context or "Không có thông tin về chủ đề hoặc mục học hiện tại.",
-                summary=context_package.summary or "Không có",
-                history=history_str or "Không có",
-                user_message=request.message
+                topic_context=context_package.structural_context or "Không có chủ đề cụ thể.",
+                summary=context_package.summary or "Không có tóm tắt.",
+                history=history_str or "Đây là tin nhắn đầu tiên.",
+                user_message=request.message,
+                relevance_guidance=relevance_guidance or "Câu hỏi của người dùng có liên quan trực tiếp đến chủ đề.",
+                output_style_guidance=output_style_guidance
             )
             
             # Send initial metadata
