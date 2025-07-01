@@ -11,20 +11,25 @@ from app.config.model_router_config import (
     FORCE_LEVEL_3_KEYWORDS,
     MODEL_STRATEGY
 )
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+from app.models.llm_config import LLMConfig
 
 class ModelRouterService:
     """A service to select the best LLM model based on context and message."""
 
-    def _determine_domain(self, topic_title: Optional[str], node_title: Optional[str]) -> Domain:
-        """Determines the knowledge domain based on topic and node titles."""
-        if not topic_title and not node_title:
+    def _determine_domain(self, user_message: str, topic_title: Optional[str], node_title: Optional[str]) -> Domain:
+        """Determines the knowledge domain based on message, topic, and node titles."""
+        
+        # Combine all available context for a comprehensive check
+        context_text = f"{user_message} {topic_title or ''} {node_title or ''}".lower()
+
+        if not context_text.strip():
             return Domain.DEFAULT
 
-        # Combine titles for a comprehensive check
-        full_title = f"{topic_title or ''} {node_title or ''}".lower()
-
         for domain, keywords in DOMAIN_KEYWORDS.items():
-            if any(keyword in full_title for keyword in keywords):
+            if any(keyword in context_text for keyword in keywords):
                 return domain
         
         return Domain.DEFAULT
@@ -52,19 +57,28 @@ class ModelRouterService:
         self,
         user_message: str,
         topic_title: Optional[str] = None,
-        node_title: Optional[str] = None
-    ) -> Tuple[str, Domain, ModelTier]:
+        node_title: Optional[str] = None,
+        preferred_model: Optional[str] = None
+    ) -> Tuple[str, Domain]:
         """
-        Selects the optimal model, returning the model name, its domain, and tier.
+        Selects the best model based on domain, tier, and preferences.
+        Returns a tuple of (model_name, detected_domain).
         """
-        domain = self._determine_domain(topic_title, node_title)
+        domain = self._determine_domain(user_message, topic_title, node_title)
+
+        if preferred_model and preferred_model in LLMConfig.AVAILABLE_MODELS:
+            logger.info(f"Using user-preferred model: {preferred_model}, but domain detected as: {domain.value}")
+            return preferred_model, domain
+
         tier = self._determine_tier(user_message)
 
-        selected_model = MODEL_STRATEGY[domain][tier]
-        
-        logger.info(f"Model selected. Domain: {domain.value}, Tier: {tier.value} -> Model: {selected_model}")
+        model_name = MODEL_STRATEGY.get(domain, {}).get(tier)
+        if not model_name:
+            # Fallback to default if specific strategy not found
+            model_name = MODEL_STRATEGY[Domain.DEFAULT][tier]
 
-        return selected_model, domain, tier
+        logger.info(f"Selected model: {model_name} (Domain: {domain.value}, Tier: {tier.value})")
+        return model_name, domain
 
 # Create a single instance to be used across the application
 model_router = ModelRouterService() 

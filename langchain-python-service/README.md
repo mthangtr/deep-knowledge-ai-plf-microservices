@@ -1,21 +1,29 @@
 # LangChain Python Service
 
-Multi-agent LLM service với **Smart Single Context** optimization và OpenRouter.ai integration.
+Multi-agent LLM service với **Hệ thống lý luận đa tầng (Multi-Layered Reasoning System)** và tối ưu hóa chuyên sâu.
 
 ## 🚀 Features
 
 ### Core Features
 
 - ✅ **Smart Single Context** với token budget management
-- ✅ **Intelligent Router Agent** - phân tích context need tự động
+- ✅ **Hệ thống lý luận đa tầng** - phân tích ngữ cảnh, persona, phong cách, và chuyên ngành
 - ✅ **Token-based Compression** - tối ưu hóa chi phí và performance
-- ✅ **Progressive Context Loading** - chỉ load context cần thiết
 - ✅ Single agent chat với context optimization
 - ✅ Multi-agent conversations với parallel processing
 - ✅ OpenRouter.ai integration (100+ models)
 - ✅ Async processing với smart caching
 - ✅ FastAPI với auto docs
 - ✅ Docker support
+
+### 🆕 Phase 4: Multi-Layered Reasoning & Communication
+
+- ✅ **Triết lý giao tiếp 2 cấp độ**: "Khung Giao tiếp" (luôn áp dụng) và "Phương pháp Chuyên môn" (linh hoạt) đảm bảo mọi câu trả lời đều chuyên nghiệp và đúng ngữ cảnh.
+- ✅ **Intelligent Persona Engine**: Tự động chọn phương pháp chuyên môn (Socratic, Kỹ sư, Sáng tạo, Trực tiếp) dựa trên nhu cầu của người dùng.
+- ✅ **Domain-Specific Priming**: Tự động "bồi dưỡng" cho AI các quy tắc chuyên ngành (Lập trình, Khoa học,...) để câu trả lời có chiều sâu và chính xác hơn.
+- ✅ **Dynamic Output Control**: Người dùng có thể điều khiển độ dài (ngắn gọn/chi tiết) và sự mới mẻ của câu trả lời.
+- ✅ **Relevance-Aware Responses**: AI nhận biết câu hỏi lạc đề và đưa ra các xử lý phù hợp, giúp duy trì dòng học tập.
+- ✅ **Context-Rich Model Routing**: Bộ định tuyến model sử dụng cả ngữ cảnh buổi học (topic/node) và câu hỏi hiện tại để chọn model tối ưu nhất.
 
 ### 🆕 Phase 3: Advanced Optimization Features
 
@@ -59,24 +67,65 @@ graph TD
     end
 ```
 
-## 🧠 Smart Context System
+## 🧠 Triết lý hệ thống: Lý luận đa tầng
 
-### Context Decision Tree
+Hệ thống không còn hoạt động như một chatbot hỏi-đáp đơn thuần. Thay vào đó, mỗi yêu cầu của người dùng sẽ đi qua một **hệ thống lý luận đa tầng** để đảm bảo câu trả lời cuối cùng là thông minh, phù hợp và hữu ích nhất.
 
+### Sơ đồ luồng lý luận (Reasoning Flow)
+
+```mermaid
+graph TD
+    A[User Request<br/>(message, topic_id, node_id)] --> B{DB Context Manager};
+    B --> C[Context Package<br/>(history, summary, structural_context)];
+
+    subgraph "Intelligence Layer (in main.py)"
+        C --> D{1. Relevance Analysis};
+        D --> E[relevance_guidance];
+
+        A --> F{2. Persona Engine};
+        F --> G[persona_description];
+
+        A --> H{3. Output Style Analysis};
+        H --> I[output_style_guidance];
+
+        C --> J{4. Domain Router};
+        A --> J;
+        J --> K[selected_model, detected_domain];
+
+        K --> L{5. Domain Priming};
+        L --> M[domain_instructions];
+    end
+
+    subgraph "Final Assembly (Prompt)"
+        E --> N[MASTER_SYSTEM_PROMPT];
+        G --> N;
+        I --> N;
+        M --> N;
+        C --> N;
+    end
+
+    N --> O{Orchestrator};
+    K --> O;
+    O --> P[LLM];
+    P --> Q[Streaming Response to User];
 ```
-User Message → Router Analysis:
-├─ "Xin chào" → NONE (0 tokens)
-├─ "Tiếp tục như lúc nãy" → RECENT_ONLY (~300 tokens)
-├─ "Về vấn đề X tuần trước" → SMART_RETRIEVAL (~800 tokens)
-└─ "Tóm tắt toàn bộ" → FULL_CONTEXT (~1500 tokens)
-```
 
-### Token Budget Management
+### Triết lý giao tiếp 2 cấp độ
 
-- **Max Context**: 1500 tokens (configurable)
-- **Priority**: Recent (50%) > Relevant (30%) > Summary (10%) > Historical (10%)
-- **Auto-compression**: Khi session > 4500 tokens hoặc 80+ messages
-- **Smart retrieval**: Chỉ khi conversation có depth (>3 messages)
+Đây là cốt lõi của hệ thống, được định nghĩa trong `MASTER_SYSTEM_PROMPT`:
+
+1.  **Khung Giao tiếp (Luôn áp dụng):** Đóng vai trò `STRATEGIC_ASSISTANT`, đảm bảo mọi câu trả lời đều có cấu trúc, mang tính cộng tác và dẫn dắt cuộc trò chuyện.
+2.  **Phương pháp Chuyên môn (Linh hoạt):** Dựa vào ngữ cảnh, AI sẽ áp dụng các phương pháp khác nhau như `PRAGMATIC_ENGINEER` (khi cần giải pháp kỹ thuật) hoặc `DIRECT_INSTRUCTOR` (khi người dùng cần câu trả lời thẳng).
+
+## User-Driven Controls
+
+Giờ đây, người dùng có thể chủ động định hình cuộc trò chuyện bằng cách sử dụng các cụm từ tự nhiên:
+
+- **Cần câu trả lời thẳng:** _"tôi không biết"_, _"giải thích thẳng cho tôi"_.
+- **Cần phân tích sâu:** _"dùng model mạnh nhất"_, _"phân tích kỹ"_.
+- **Cần câu trả lời sáng tạo:** _"giải thích như thể là..."_, _"ví dụ vui"_.
+- **Cần câu trả lời ngắn gọn:** _"tóm tắt"_, _"ý chính"_.
+- **Cần giải thích lại:** _"nói cách khác"_, _"theo một góc nhìn khác"_.
 
 ## Quick Start
 

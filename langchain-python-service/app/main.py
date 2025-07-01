@@ -19,6 +19,8 @@ from app.prompts.core_prompts import MASTER_SYSTEM_PROMPT
 from app.prompts.personas import SOCRATIC_MENTOR, CREATIVE_EXPLORER, PRAGMATIC_ENGINEER, DIRECT_INSTRUCTOR
 from app.services.model_router_service import model_router
 from app.services.cache_manager import cache_manager
+from app.prompts.domain_instructions import DOMAIN_INSTRUCTIONS_MAP
+from app.config.model_router_config import Domain
 
 load_dotenv()
 
@@ -210,13 +212,19 @@ async def smart_chat(request: SmartChatRequest):
                 message=request.message
             )
 
-            # --- MODEL ROUTER ---
-            selected_model, domain, tier = model_router.select_model(
+            # --- MODEL & DOMAIN ROUTER ---
+            # Dynamically select the best model and get domain-specific instructions
+            selected_model, detected_domain = model_router.select_model(
                 user_message=request.message,
                 topic_title=context_package.topic_title,
-                node_title=context_package.node_title
+                node_title=context_package.node_title,
+                preferred_model=request.model
             )
-            
+            domain_specific_instructions = DOMAIN_INSTRUCTIONS_MAP.get(
+                detected_domain, 
+                DOMAIN_INSTRUCTIONS_MAP[Domain.DEFAULT]
+            )
+
             # Build a structured history string for the prompt
             history_str = "\n".join(
                 [f"{msg.role}: {msg.content}" for msg in context_package.recent]
@@ -306,6 +314,7 @@ async def smart_chat(request: SmartChatRequest):
             # Format the master system prompt
             system_prompt = MASTER_SYSTEM_PROMPT.format(
                 persona_description=selected_persona,
+                domain_specific_instructions=domain_specific_instructions,
                 topic_context=context_package.structural_context or "Không có chủ đề cụ thể.",
                 summary=context_package.summary or "Không có tóm tắt.",
                 history=history_str or "Đây là tin nhắn đầu tiên.",
@@ -332,71 +341,65 @@ async def smart_chat(request: SmartChatRequest):
                     "persona_used": persona_name,
                     "model_used": selected_model,
                     "routing_info": {
-                        "domain": domain.value,
-                        "tier": tier.value
+                        "domain": detected_domain.value,
                     }
                 }
             }
             yield f"data: {json.dumps(metadata)}\n\n"
             
-            # Generate streaming AI response
-            logger.info(f"Starting streaming with model: {selected_model}")
+            # --- EXECUTION ---
+            # Convert context messages to the format expected by the orchestrator
+            context_for_stream = [
+                {"role": msg.role, "content": msg.content} 
+                for msg in context_package.recent
+            ]
+            response_generator = orchestrator.single_agent_chat_stream(
+                message=request.message,
+                context=context_for_stream,
+                system_prompt=system_prompt,
+                options={
+                    "model": selected_model,
+                    "temperature": 0.7,
+                    "max_tokens": 2000
+                }
+            )
             
-            try:
-                # Get the async generator instance
-                stream_generator = orchestrator.single_agent_chat_stream(
-                    message=request.message,
-                    context=[],
-                    system_prompt=system_prompt,
-                    options={"model": selected_model}
-                )
-                
-                full_response = ""
-                
-                # Stream response chunks by iterating over the generator
-                async for chunk_content in stream_generator:
-                    if chunk_content:
-                        full_response += chunk_content
-                        
-                        chunk_data = {
-                            "type": "content",
-                            "content": chunk_content
-                        }
-                        yield f"data: {json.dumps(chunk_data)}\n\n"
-                
-                # Get session stats
-                session_stats = await db_context_manager.get_session_stats(session_id)
-                
-                processing_time = time.time() - start_time
-                
-                # Record performance metrics
-                await db_context_manager.record_performance_metrics(
-                    response_time=processing_time,
-                    model_used=selected_model,
-                    context_metrics=quality_metrics,
-                    error=False
-                )
-                
-                # Send completion signal
-                completion = {
-                    "type": "done",
-                    "full_response": full_response,
-                    "model_used": selected_model,
-                    "processing_time": processing_time,
-                    "session_stats": serialize_datetime_objects(session_stats)
-                }
-                yield f"data: {json.dumps(completion)}\n\n"
-                
-            except Exception as ai_error:
-                logger.error(f"AI generation failed: {ai_error}")
-                # Send error response
-                error_data = {
-                    "type": "error",
-                    "error": "Xin lỗi, tôi đang gặp sự cố kỹ thuật. Hãy thử lại sau.",
-                    "details": str(ai_error)
-                }
-                yield f"data: {json.dumps(error_data)}\n\n"
-                
+            full_response = ""
+            
+            # Stream response chunks by iterating over the generator
+            async for chunk_content in response_generator:
+                if chunk_content:
+                    full_response += chunk_content
+                    
+                    chunk_data = {
+                        "type": "content",
+                        "content": chunk_content
+                    }
+                    yield f"data: {json.dumps(chunk_data)}\n\n"
+            
+            # Get session stats
+            session_stats = await db_context_manager.get_session_stats(session_id)
+            
+            processing_time = time.time() - start_time
+            
+            # Record performance metrics
+            await db_context_manager.record_performance_metrics(
+                response_time=processing_time,
+                model_used=selected_model,
+                context_metrics=quality_metrics,
+                error=False
+            )
+            
+            # Send completion signal
+            completion = {
+                "type": "done",
+                "full_response": full_response,
+                "model_used": selected_model,
+                "processing_time": processing_time,
+                "session_stats": serialize_datetime_objects(session_stats)
+            }
+            yield f"data: {json.dumps(completion)}\n\n"
+            
         except Exception as e:
             logger.error(f"Smart chat error: {e}")
             error_data = {
