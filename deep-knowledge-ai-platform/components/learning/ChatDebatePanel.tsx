@@ -22,6 +22,7 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useLearningChat } from "@/hooks/use-learning-chat";
+import { MermaidDiagram } from './MermaidDiagram';
 
 interface ChatDebatePanelProps {
     selectedTopic: LearningTopic | null;
@@ -31,6 +32,32 @@ interface ChatDebatePanelProps {
 
 // Memoized component để format AI response - CRITICAL cho performance
 const FormattedAIResponse = React.memo(({ content }: { content: string }) => {
+    const parts = useMemo(() => {
+        if (!content) return [];
+
+        const mermaidRegex = /```mermaid\n([\s\S]*?)```/g;
+        const result: { type: 'markdown' | 'mermaid'; value: string }[] = [];
+        let lastIndex = 0;
+        let match;
+
+        while ((match = mermaidRegex.exec(content)) !== null) {
+            // Add the text before the mermaid block
+            if (match.index > lastIndex) {
+                result.push({ type: 'markdown', value: content.substring(lastIndex, match.index) });
+            }
+            // Add the mermaid block
+            result.push({ type: 'mermaid', value: match[1] });
+            lastIndex = match.index + match[0].length;
+        }
+
+        // Add any remaining text after the last mermaid block
+        if (lastIndex < content.length) {
+            result.push({ type: 'markdown', value: content.substring(lastIndex) });
+        }
+
+        return result;
+    }, [content]);
+
     const markdownComponents = useMemo(() => ({
         h1: ({ node, ...props }: any) => <h1 className="text-3xl font-semibold mt-10 mb-5 tracking-tight text-foreground" {...props} />,
         h2: ({ node, ...props }: any) => <h2 className="text-2xl font-semibold mt-8 mb-4 tracking-tight text-foreground" {...props} />,
@@ -80,14 +107,32 @@ const FormattedAIResponse = React.memo(({ content }: { content: string }) => {
         hr: ({ node, ...props }: any) => <hr className="my-8 border-border/40" {...props} />,
     }), []);
 
+    if (parts.length === 0) {
+        return (
+            <div className="font-inter text-foreground antialiased prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                    {content}
+                </ReactMarkdown>
+            </div>
+        );
+    }
+
     return (
         <div className="font-inter text-foreground antialiased prose prose-sm dark:prose-invert max-w-none">
-            <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={markdownComponents}
-            >
-                {content}
-            </ReactMarkdown>
+            {parts.map((part, index) => {
+                if (part.type === 'mermaid') {
+                    return <MermaidDiagram key={index} chart={part.value} />;
+                }
+                return (
+                    <ReactMarkdown
+                        key={index}
+                        remarkPlugins={[remarkGfm]}
+                        components={markdownComponents}
+                    >
+                        {part.value}
+                    </ReactMarkdown>
+                );
+            })}
         </div>
     );
 });
