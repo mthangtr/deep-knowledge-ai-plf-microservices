@@ -3,8 +3,14 @@ from pydantic import BaseModel
 from loguru import logger
 import uuid
 from datetime import datetime
+from enum import Enum
 
-from app.agents.router_agent import RouterAgent, ContextNeed, ContextNeedType
+class ContextNeedType(Enum):
+    """Mô tả loại context cần thiết cho một yêu cầu."""
+    NONE = "NONE"
+    RECENT_ONLY = "RECENT_ONLY"
+    SMART_RETRIEVAL = "SMART_RETRIEVAL"
+    FULL_CONTEXT = "FULL_CONTEXT"
 
 class Message(BaseModel):
     id: str
@@ -33,8 +39,6 @@ class ContextManager:
     """Quản lý context cho chat sessions với strategy tiết kiệm tokens"""
     
     def __init__(self):
-        self.router_agent = RouterAgent()
-        
         # In-memory storage (trong thực tế sẽ dùng database)
         self.messages: Dict[str, List[Message]] = {}  # session_id -> messages
         self.session_summaries: Dict[str, SessionSummary] = {}  # session_id -> summary
@@ -50,70 +54,7 @@ class ContextManager:
     ) -> ContextPackage:
         """Lấy context phù hợp cho message dựa trên router analysis"""
         
-        try:
-            # Get recent messages
-            recent_messages = self._get_recent_messages(session_id, limit=10)
-            
-            # Convert to dict format for router
-            recent_dict = [
-                {
-                    "role": msg.role,
-                    "content": msg.content,
-                    "timestamp": msg.timestamp.isoformat()
-                }
-                for msg in recent_messages
-            ]
-            
-            # Router decides context need
-            context_need = await self.router_agent.analyze_context_need(
-                message, recent_dict
-            )
-            
-            logger.info(f"Router decision: {context_need.type} - {context_need.reason}")
-            
-            # Build context package based on router decision
-            context_package = ContextPackage(
-                recent=recent_messages,
-                context_type=context_need.type
-            )
-            
-            if context_need.type == ContextNeedType.NONE:
-                # No additional context needed
-                pass
-                
-            elif context_need.type == ContextNeedType.RECENT_ONLY:
-                # Recent messages already included
-                pass
-                
-            elif context_need.type == ContextNeedType.SMART_RETRIEVAL:
-                # Search for relevant historical messages
-                relevant_messages = self._vector_search_simulation(
-                    session_id, user_id, context_need.keywords
-                )
-                context_package.relevant = relevant_messages
-                
-            elif context_need.type == ContextNeedType.FULL_CONTEXT:
-                # Include summary + all context
-                summary = self._get_session_summary(session_id)
-                if summary:
-                    context_package.summary = summary.summary
-                
-                # Get more historical messages
-                historical = self._get_recent_messages(session_id, limit=50)
-                context_package.historical = historical
-            
-            # Estimate token usage
-            context_package.total_tokens_estimate = self._estimate_tokens(context_package)
-            
-            return context_package
-            
-        except Exception as e:
-            logger.error(f"Error getting context: {e}")
-            # Fallback to recent only
-            return ContextPackage(
-                recent=self._get_recent_messages(session_id, limit=5),
-                context_type=ContextNeedType.RECENT_ONLY
-            )
+        raise NotImplementedError("This in-memory ContextManager is deprecated and should not be used.")
     
     def add_message(
         self,

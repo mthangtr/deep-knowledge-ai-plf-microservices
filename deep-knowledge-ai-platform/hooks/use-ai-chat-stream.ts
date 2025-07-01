@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { API_ENDPOINTS } from "@/lib/config";
 import { LearningChat } from "@/types/database";
+import { useAIChat } from "@/components/providers/ai-chat-provider";
 
 interface StreamingResponse {
   type: "user_message" | "metadata" | "content" | "done" | "error";
@@ -26,13 +27,13 @@ interface UseAIChatStreamCallbacks {
 export function useAIChatStream() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { sessionId, setSessionId } = useAIChat();
 
   const sendMessageStream = useCallback(
     async (
       message: string,
       topicId: string,
       nodeId?: string,
-      sessionId?: string,
       callbacks?: UseAIChatStreamCallbacks
     ): Promise<{ success: boolean; error?: string }> => {
       setIsStreaming(true);
@@ -104,6 +105,7 @@ export function useAIChatStream() {
 
                   case "done":
                     if (data.ai_message && data.session_id) {
+                      setSessionId(data.session_id);
                       callbacks?.onComplete?.({
                         ai_message: data.ai_message,
                         session_id: data.session_id,
@@ -135,7 +137,7 @@ export function useAIChatStream() {
         setIsStreaming(false);
       }
     },
-    []
+    [sessionId, setSessionId]
   );
 
   return {

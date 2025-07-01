@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 from app.models.llm_config import LLMConfig
 from app.agents.multi_agent import MultiAgentOrchestrator
 from app.agents.db_context_manager import DatabaseContextManager
-from app.agents.router_agent import ContextNeedType
+from app.prompts.core_prompts import MASTER_SYSTEM_PROMPT
 
 load_dotenv()
 
@@ -182,30 +182,17 @@ async def smart_chat(request: SmartChatRequest):
                 message=request.message
             )
             
-            # Build context for LLM - OPTIMIZED: Smart context building
-            llm_context = []
+            # Build a structured history string for the prompt
+            history_str = "\n".join(
+                [f"{msg.role}: {msg.content}" for msg in context_package.recent]
+            )
             
-            # Add recent messages (always include)
-            for msg in context_package.recent:
-                llm_context.append({
-                    "role": msg.role,
-                    "content": msg.content
-                })
-            
-            # Only add summary if we have many messages to avoid token waste
-            if context_package.summary and len(context_package.recent) > 5:
-                llm_context.insert(0, {
-                    "role": "system",
-                    "content": f"Tóm tắt cuộc hội thoại trước: {context_package.summary}"
-                })
-            
-            # Only add relevant messages if context type requires it
-            if context_package.context_type == ContextNeedType.SMART_RETRIEVAL:
-                for msg in context_package.relevant[:3]:  # Limit to 3 most relevant
-                    llm_context.append({
-                        "role": msg.role,
-                        "content": f"[Relevant] {msg.content}"
-                    })
+            # Format the master system prompt
+            system_prompt = MASTER_SYSTEM_PROMPT.format(
+                summary=context_package.summary or "Không có",
+                history=history_str or "Không có",
+                user_message=request.message
+            )
             
             # Send initial metadata
             metadata = {
@@ -230,18 +217,19 @@ async def smart_chat(request: SmartChatRequest):
             logger.info(f"Starting streaming with model: {request.model}")
             
             try:
-                # Get streaming LLM instance
-                result = await orchestrator.single_agent_chat_stream(
+                # Get the async generator instance
+                stream_generator = orchestrator.single_agent_chat_stream(
                     message=request.message,
-                    context=llm_context,
+                    context=[],
+                    system_prompt=system_prompt,
                     options={"model": request.model}
                 )
                 
                 full_response = ""
                 model_used = request.model or "google/gemini-2.0-flash-lite-001"
                 
-                # Stream response chunks
-                async for chunk_content in result["stream"]:
+                # Stream response chunks by iterating over the generator
+                async for chunk_content in stream_generator:
                     if chunk_content:
                         full_response += chunk_content
                         

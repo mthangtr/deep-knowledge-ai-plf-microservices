@@ -8,34 +8,29 @@ from loguru import logger
 import openai
 from openai import AsyncOpenAI
 
-from app.agents.router_agent import RouterAgent, ContextNeed, ContextNeedType
-from app.agents.context_manager import Message, ContextPackage, SessionSummary
+from app.agents.context_manager import Message, ContextPackage, SessionSummary, ContextNeedType
 from app.agents.content_compressor import ContentCompressor, ContentType
 from app.agents.context_quality_analyzer import ContextQualityAnalyzer, ContextMetrics
 from app.agents.performance_monitor import PerformanceMonitor
 
 class DatabaseContextManager:
-    """PostgreSQL-based context manager với smart single context optimization"""
+    """PostgreSQL-based context manager with smart single context optimization"""
     
     def __init__(self):
-        self.router_agent = RouterAgent()
-        self.content_compressor = ContentCompressor()  # Add content compressor
-        self.quality_analyzer = ContextQualityAnalyzer()  # NEW: Quality analyzer
-        self.performance_monitor = PerformanceMonitor()  # NEW: Performance monitor
+        self.content_compressor = ContentCompressor()
+        self.quality_analyzer = ContextQualityAnalyzer()
+        self.performance_monitor = PerformanceMonitor()
         self.db_pool: Optional[asyncpg.Pool] = None
-        # Disable OpenAI client - using OpenRouter for LLM calls
         self.openai_client = None
         # Smart context configuration
-        self.max_context_tokens = 1500  # Reasonable limit for most models
-        self.recent_messages_limit = 10  # Standard recent context
-        # Progressive loading thresholds
+        self.max_context_tokens = 2000
+        self.recent_messages_limit = 20
+        # Progressive loading thresholds (simplified)
         self.progressive_thresholds = {
-            'minimal': 300,     # Very light context
-            'standard': 800,    # Normal context  
-            'extended': 1200,   # Rich context
-            'full': 1500       # Maximum context
+            'standard': 1200,
+            'full': 2000
         }
-        logger.info("Database Context Manager initialized with smart single context, quality analysis and performance monitoring")
+        logger.info("Database Context Manager initialized with a simplified, more robust context strategy.")
     
     async def init_db(self):
         """Initialize PostgreSQL connection pool and start monitoring"""
@@ -139,63 +134,42 @@ class DatabaseContextManager:
         user_id: str,
         message: str
     ) -> Tuple[ContextPackage, ContextMetrics]:
-        """Get smart context with progressive loading and quality analysis"""
+        """Get smart context with a simplified, more robust strategy."""
         context_start_time = time.time()
         
         try:
-            # Get recent messages from DB
-            recent_messages = await self._get_recent_messages_db(session_id, self.recent_messages_limit)
+            # SIMPLIFIED LOGIC: Always fetch a good amount of context.
+            # No more router agent, which can be unreliable.
             
-            # Convert to dict for router
-            recent_dict = [
-                {
-                    "role": "user" if not msg['is_ai_response'] else "assistant",
-                    "content": msg['message'],
-                    "timestamp": msg['created_at'].isoformat()
-                }
-                for msg in recent_messages
-            ]
+            # 1. Get a solid base of recent messages and any existing summary.
+            recent_messages_task = self._get_recent_messages_db(session_id, self.recent_messages_limit)
+            summary_task = self._get_session_summary_db(session_id)
             
-            # Router decides context need
-            context_need = await self.router_agent.analyze_context_need(
-                message, recent_dict
+            recent_messages_db, summary = await asyncio.gather(recent_messages_task, summary_task)
+
+            # 2. Build the context package directly.
+            converted_messages = self._convert_to_messages(recent_messages_db)
+            
+            context_package = ContextPackage(
+                recent=converted_messages,
+                summary=summary,
+                relevant=[],
+                historical=[],
+                context_type=ContextNeedType.FULL_CONTEXT
             )
+
+            # Estimate tokens
+            context_package.total_tokens_estimate = self._estimate_tokens(context_package)
             
-            logger.info(f"Router decision: {context_need.type} - {context_need.reason} "
-                       f"(confidence: {context_need.confidence:.2f})")
-            
-            # Progressive loading based on context type and confidence
-            if context_need.type == ContextNeedType.NONE:
-                # No context needed - maximum token savings
-                context_package = await self._build_minimal_context(session_id)
-                
-            elif context_need.type == ContextNeedType.RECENT_ONLY:
-                # Progressive recent context based on confidence
-                if context_need.confidence >= 0.8:
-                    context_package = await self._build_standard_context(session_id, recent_messages)
-                else:
-                    context_package = await self._build_extended_context(session_id, recent_messages)
-                    
-            elif context_need.type == ContextNeedType.SMART_RETRIEVAL:
-                # Search with progressive depth
-                context_package = await self._build_retrieval_context(
-                    session_id, user_id, message, 
-                    context_need.keywords, recent_messages,
-                    deep_search=(context_need.confidence >= 0.8)
-                )
-                
-            elif context_need.type == ContextNeedType.FULL_CONTEXT:
-                # Full context with compression
-                context_package = await self._build_full_context(session_id, recent_messages)
-            
-            else:
-                # Fallback
-                context_package = await self._build_standard_context(session_id, recent_messages)
-            
+            logger.info(f"Built full context directly for session {session_id}. "
+                        f"Found {len(context_package.recent)} recent messages "
+                        f"and summary: {bool(context_package.summary)}. "
+                        f"Estimated tokens: {context_package.total_tokens_estimate}")
+
             # Calculate context processing time
             context_processing_time = time.time() - context_start_time
             
-            # NEW: Analyze context quality
+            # 3. Analyze context quality (this is still useful).
             quality_metrics = await self.quality_analyzer.analyze_context_quality(
                 context_package=context_package,
                 user_message=message,
@@ -211,7 +185,7 @@ class DatabaseContextManager:
             
         except Exception as e:
             logger.error(f"Error getting context: {e}")
-            # Fallback to minimal context
+            # Fallback to minimal context on error
             context_package = await self._build_minimal_context(session_id)
             
             # Create default quality metrics for error case
@@ -288,7 +262,7 @@ class DatabaseContextManager:
         )
         
         # Apply extended budget
-        if self._estimate_tokens(context_package) > self.progressive_thresholds['extended']:
+        if self._estimate_tokens(context_package) > self.progressive_thresholds['standard']:
             context_package = await self._apply_token_budget(context_package)
         
         context_package.total_tokens_estimate = self._estimate_tokens(context_package)
@@ -333,7 +307,7 @@ class DatabaseContextManager:
                        f"(deep_search={deep_search})")
         
         # Apply token budget
-        target_tokens = self.progressive_thresholds['extended' if deep_search else 'standard']
+        target_tokens = self.progressive_thresholds['full']
         if self._estimate_tokens(context_package) > target_tokens:
             context_package = await self._optimize_retrieval_context(context_package, target_tokens)
         

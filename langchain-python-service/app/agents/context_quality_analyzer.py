@@ -8,13 +8,12 @@ from dataclasses import dataclass
 from enum import Enum
 import time
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from loguru import logger
 import statistics
 import re
 
-from app.agents.context_manager import ContextPackage, Message
-from app.agents.router_agent import ContextNeedType
+from app.agents.context_manager import ContextPackage, Message, ContextNeedType
 
 class QualityScore(Enum):
     """Quality score levels"""
@@ -307,7 +306,7 @@ class ContextQualityAnalyzer:
         if not context_package.recent:
             return 1.0  # No context = perfectly fresh
         
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         total_weight = 0.0
         freshness_sum = 0.0
         
@@ -521,10 +520,10 @@ class ContextQualityAnalyzer:
     def get_quality_trends(self, hours_back: int = 24) -> Dict[str, Any]:
         """Get quality trends over specified time period"""
         
-        cutoff_time = datetime.now() - timedelta(hours=hours_back)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours_back)
         recent_metrics = [
             m for m in self.metrics_history 
-            if m.timestamp >= cutoff_time
+            if m.timestamp.replace(tzinfo=timezone.utc) >= cutoff_time
         ]
         
         if not recent_metrics:

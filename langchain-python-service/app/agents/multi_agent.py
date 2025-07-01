@@ -1,7 +1,7 @@
 import asyncio
 import time
 import os
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, AsyncGenerator
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocess as mp
 from dataclasses import dataclass
@@ -116,88 +116,48 @@ Hãy tương tác một cách thân thiện, động viên và hỗ trợ tốt 
     async def single_agent_chat_stream(
         self,
         message: str,
-        context: Optional[List[Dict]] = None,
+        context: List[Dict[str, str]] = [],
         system_prompt: Optional[str] = None,
-        options: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        options: Optional[Dict[str, Any]] = {}
+    ) -> AsyncGenerator[str, None]:
         """Single agent chat với streaming response"""
         start_time = time.time()
         
         try:
-            # Get streaming LLM
-            model_name = options.get("model") if options else None
-            llm = LLMConfig.get_llm(
-                model_name=model_name,
-                temperature=options.get("temperature", 0.7) if options else 0.7,
-                max_tokens=options.get("max_tokens", 2000) if options else 2000,
-                streaming=True,  # Force streaming
-                enable_retry=False
-            )
+            # Separate model name from other options for the factory method
+            model_name = options.pop("model", None)
+            llm = LLMConfig.get_llm(model_name=model_name, **options)
             
-            # Build messages
             messages = []
-            
-            # Add system prompt
+            # Priority for the new, comprehensive system prompt
             if system_prompt:
                 messages.append(SystemMessage(content=system_prompt))
+                # The user's message is now part of the system prompt,
+                # so we just need to signal the AI to start generating its response.
+                messages.append(HumanMessage(content="Dựa vào các chỉ thị và ngữ cảnh trên, hãy bắt đầu."))
             else:
-                default_system = """Bạn là AI Learning Assistant cho Deep Knowledge AI Platform.
-Nhiệm vụ của bạn là:
-- Hỗ trợ học viên hiểu sâu về chủ đề đang học
-- Đưa ra giải thích rõ ràng, dễ hiểu với ví dụ thực tế
-- Khuyến khích tư duy phản biện và đặt câu hỏi
-- Điều chỉnh phong cách giảng dạy theo trình độ học viên
-- Luôn trả lời bằng tiếng Việt
-
-Hãy tương tác một cách thân thiện, động viên và hỗ trợ tốt nhất cho học viên."""
-                messages.append(SystemMessage(content=default_system))
-            
-            # Add context messages
-            if context:
-                for msg in context[-10:]:  # Last 10 messages
-                    if msg["role"] == "user":
+                # Fallback to old method if no system_prompt is provided
+                # This ensures backward compatibility but should be avoided.
+                for msg in context:
+                    if msg["role"] == "user" or msg["role"] == "human":
                         messages.append(HumanMessage(content=msg["content"]))
-                    elif msg["role"] == "assistant":
+                    elif msg["role"] == "assistant" or msg["role"] == "ai":
                         messages.append(AIMessage(content=msg["content"]))
+                messages.append(HumanMessage(content=message))
+
+            logger.info(f"Starting streaming response with {len(messages)} message(s) in context.")
             
-            # Add current message
-            messages.append(HumanMessage(content=message))
+            async for chunk in llm.astream(messages):
+                yield chunk.content
             
-            # Create async generator for streaming
-            async def stream_generator():
-                try:
-                    logger.info(f"Starting streaming response for {len(messages)} messages")
-                    async for chunk in llm.astream(messages):
-                        if hasattr(chunk, 'content') and chunk.content:
-                            content = chunk.content
-                            if isinstance(content, list):
-                                # Handle list content
-                                for item in content:
-                                    if hasattr(item, 'text'):
-                                        yield item.text
-                                    else:
-                                        yield str(item)
-                            else:
-                                yield str(content)
-                except Exception as e:
-                    logger.error(f"Streaming error: {e}")
-                    yield f"[Error: {str(e)}]"
-            
-            processing_time = time.time() - start_time
-            
-            return {
-                "stream": stream_generator(),
-                "model_used": model_name or LLMConfig.get_default_model(),
-                "processing_time": processing_time,
-                "agent_info": {
-                    "type": "single_agent_stream",
-                    "system_prompt_used": bool(system_prompt)
-                }
-            }
+            # An async generator implicitly ends when the loop is done.
+            # No 'return' with a value is allowed.
             
         except Exception as e:
             logger.error(f"Single agent stream error: {e}")
-            raise
+            # In case of an error, we can yield an error message if desired,
+            # but we must not 'return' a value.
+            yield f"[LỖI: {e}]"
     
     async def multi_agent_conversation(
         self,

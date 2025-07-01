@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { learningService } from "@/lib/services/learning";
 import { LearningChat } from "@/types/database";
-import { useAIChat } from "./use-ai-chat";
+import { useAIChat } from "@/components/providers/ai-chat-provider";
 import { useAIChatStream } from "./use-ai-chat-stream";
 
 interface UseLearningChatState {
@@ -130,7 +130,7 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
       }));
 
       try {
-        // Call AI service
+        // Call AI service using the shared context
         const response = await aiChat.sendMessage(
           params.message,
           topicId,
@@ -244,7 +244,6 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
           params.message,
           topicId,
           nodeId,
-          undefined, // session_id
           {
             onUserMessage: (realUserMessage) => {
               // Replace optimistic user message with real one

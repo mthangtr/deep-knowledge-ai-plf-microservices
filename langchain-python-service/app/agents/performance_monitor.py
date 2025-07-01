@@ -16,7 +16,7 @@ import statistics
 import json
 
 from app.agents.context_quality_analyzer import ContextMetrics, QualityScore
-from app.agents.router_agent import ContextNeedType
+from app.agents.context_manager import ContextNeedType
 
 class AlertLevel(Enum):
     """Alert severity levels"""

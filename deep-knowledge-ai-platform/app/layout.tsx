@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Providers } from '@/components/providers'
 import './globals.css'
-import { AnimatedBackground } from '@/components/layout/AnimatedBackground'
+import { AIChatProvider } from "@/components/providers/ai-chat-provider";
 
 export const metadata: Metadata = {
   title: 'Deep Knowledge AI Platform',
@@ -18,10 +18,9 @@ export default function RootLayout({
     <html lang="vi" suppressHydrationWarning>
       <body suppressHydrationWarning>
         <Providers>
-          {children}
-          {/* <div className="fixed inset-0 z-0">
-            <AnimatedBackground />
-          </div> */}
+          <AIChatProvider>
+            {children}
+          </AIChatProvider>
         </Providers>
       </body>
     </html>
