@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "serena": {
+      "command": "C:/Users/tmtmt/.local/bin/uv.exe",
+      "args": [
+        "run",
+        "--directory",
+        "D:/Workspace/serena",
+        "serena-mcp-server",
+        "--context",
+        "ide-assistant"
+      ]
+    }
+  }
+}
