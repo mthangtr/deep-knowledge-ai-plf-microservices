@@ -197,6 +197,7 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   compressed_summary TEXT,
   message_count INTEGER DEFAULT 0,
   tokens_used INTEGER DEFAULT 0,
+  user_knowledge_state JSONB NOT NULL DEFAULT '{}'::jsonb,
   is_active BOOLEAN DEFAULT true,
   last_activity TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,

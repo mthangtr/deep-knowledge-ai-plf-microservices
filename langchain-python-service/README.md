@@ -25,6 +25,12 @@ Multi-agent LLM service với **Hệ thống lý luận đa tầng (Multi-Layere
 - ✅ **Relevance-Aware Responses**: AI nhận biết câu hỏi lạc đề và đưa ra các xử lý phù hợp, giúp duy trì dòng học tập.
 - ✅ **Context-Rich Model Routing**: Bộ định tuyến model sử dụng cả ngữ cảnh buổi học (topic/node) và câu hỏi hiện tại để chọn model tối ưu nhất.
 
+### 🆕 Phase 5: Adaptive Learning & Personalization
+
+- ✅ **Adaptive Difficulty:** AI tự động điều chỉnh độ phức tạp của câu trả lời (Beginner, Intermediate, Expert) dựa trên trình độ đã được theo dõi của người dùng trong từng chủ đề.
+- ✅ **Knowledge Gap Analysis:** AI có khả năng phát hiện các "lỗ hổng kiến thức" tiềm ẩn (ví dụ: người dùng hỏi câu hỏi nâng cao về một chủ đề mà họ chưa nắm vững kiến thức cơ bản) và chủ động đề xuất các lộ trình học tập hiệu quả hơn.
+- ✅ **Personalized Learning State:** Hệ thống theo dõi và lưu trữ trạng thái học tập của người dùng trên từng topic, tạo ra một trải nghiệm học tập được cá nhân hóa sâu sắc qua các session.
+
 ### 🆕 Phase 3: Advanced Optimization Features
 
 - ✅ **Context Quality Analysis** - Real-time quality scoring (relevance, completeness, efficiency, coherence, freshness)
@@ -76,38 +82,21 @@ Hệ thống không còn hoạt động như một chatbot hỏi-đáp đơn thu
 ```mermaid
 graph TD
     A[User Request<br/>(message, topic_id, node_id)] --> B{DB Context Manager};
-    B --> C[Context Package<br/>(history, summary, structural_context)];
+    B --> C[Context Package<br/>(history, summary, structural_context, user_knowledge_state)];
 
     subgraph "Intelligence Layer (in main.py)"
-        C --> D{1. Relevance Analysis};
-        D --> E[relevance_guidance];
-
-        A --> F{2. Persona Engine};
-        F --> G[persona_description];
-
-        A --> H{3. Output Style Analysis};
-        H --> I[output_style_guidance];
-
-        C --> J{4. Domain Router};
-        A --> J;
-        J --> K[selected_model, detected_domain];
-
-        K --> L{5. Domain Priming};
-        L --> M[domain_instructions];
+        C & A --> D{Multi-Layered Analysis<br/>- Proficiency<br/>- Relevance<br/>- Persona<br/>- Style<br/>- Domain};
+        D --> E[Instruction Set<br/>(All guidances & persona)];
+        D --> F[Selected Model];
     end
 
     subgraph "Final Assembly (Prompt)"
-        E --> N[MASTER_SYSTEM_PROMPT];
-        G --> N;
-        I --> N;
-        M --> N;
-        C --> N;
+        E & C --> G[MASTER_SYSTEM_PROMPT];
     end
 
-    N --> O{Orchestrator};
-    K --> O;
-    O --> P[LLM];
-    P --> Q[Streaming Response to User];
+    G & F --> H{Orchestrator};
+    H --> I[LLM];
+    I --> J[Streaming Response to User];
 ```
 
 ### Triết lý giao tiếp 2 cấp độ
@@ -116,6 +105,19 @@ graph TD
 
 1.  **Khung Giao tiếp (Luôn áp dụng):** Đóng vai trò `STRATEGIC_ASSISTANT`, đảm bảo mọi câu trả lời đều có cấu trúc, mang tính cộng tác và dẫn dắt cuộc trò chuyện.
 2.  **Phương pháp Chuyên môn (Linh hoạt):** Dựa vào ngữ cảnh, AI sẽ áp dụng các phương pháp khác nhau như `PRAGMATIC_ENGINEER` (khi cần giải pháp kỹ thuật) hoặc `DIRECT_INSTRUCTOR` (khi người dùng cần câu trả lời thẳng).
+
+## 🧠 Adaptive Learning Engine
+
+Hệ thống giờ đây không chỉ trả lời câu hỏi, mà còn chủ động tìm cách hiểu trình độ của người dùng để tạo ra một lộ trình học tập được cá nhân hóa.
+
+### How It Works
+
+1.  **Knowledge State Tracking:** Hệ thống duy trì một `user_knowledge_state` (dạng JSONB trong DB) cho mỗi session, theo dõi trình độ của người dùng (`Beginner`, `Intermediate`, `Expert`) trên từng mục học (node).
+2.  **Proficiency Analysis:** Với mỗi tin nhắn mới, một bộ phân tích trong `main.py` sẽ đánh giá ngôn ngữ của người dùng để phát hiện các tín hiệu về sự hiểu biết của họ (ví dụ: hỏi "là gì" so với "ưu nhược điểm về hiệu năng").
+3.  **Adaptive Instruction:** Dựa trên trình độ đã được theo dõi, một chỉ dẫn `adaptive_difficulty_guidance` sẽ được đưa vào prompt để ra lệnh cho AI:
+    - **Với người mới bắt đầu:** Dùng ngôn ngữ đơn giản, nhiều so sánh, tập trung vào "Cái gì" và "Tại sao".
+    - **Với người có kinh nghiệm:** Tập trung vào ứng dụng, so sánh và các trường hợp sử dụng thực tế.
+    - **Với chuyên gia:** Tập trung vào các chủ đề nâng cao, tối ưu hóa, và phân tích kiến trúc.
 
 ## User-Driven Controls
 

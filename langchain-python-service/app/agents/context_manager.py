@@ -1,5 +1,5 @@
 from typing import Dict, List, Optional, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from loguru import logger
 import uuid
 from datetime import datetime
@@ -28,6 +28,7 @@ class ContextPackage(BaseModel):
     structural_context: Optional[str] = None
     topic_title: Optional[str] = None
     node_title: Optional[str] = None
+    user_knowledge_state: Dict[str, Any] = Field(default_factory=dict)
     context_type: ContextNeedType
     total_tokens_estimate: int = 0
 
