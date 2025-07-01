@@ -17,6 +17,7 @@ from app.agents.db_context_manager import DatabaseContextManager
 from app.prompts.core_prompts import MASTER_SYSTEM_PROMPT
 from app.prompts.personas import SOCRATIC_MENTOR, CREATIVE_EXPLORER, PRAGMATIC_ENGINEER
 from app.services.model_router_service import model_router
+from app.services.cache_manager import cache_manager
 
 load_dotenv()
 
@@ -26,9 +27,11 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting up langchain-python service...")
     await db_context_manager.init_db()
+    await cache_manager.connect()
     yield
     # Shutdown
     logger.info("Shutting down langchain-python service...")
+    await cache_manager.close()
     await db_context_manager.close()
 
 app = FastAPI(

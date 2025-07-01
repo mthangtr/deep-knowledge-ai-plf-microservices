@@ -12,7 +12,7 @@ Hãy đặt cú pháp Mermaid trong một khối code markdown như sau:
 ```mermaid
 graph TD;
     A[Bắt đầu] --> B(Xử lý);
-    B --> C{Ra quyết định};
+    B --> C{{Ra quyết định}};
     C -->|Có| D[Kết quả 1];
     C -->|Không| E[Kết quả 2];
 ```

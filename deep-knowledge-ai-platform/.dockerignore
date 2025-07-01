@@ -1,0 +1,15 @@
+# Build artifacts
+.next
+.swc
+
+# Node modules
+node_modules
+
+# PNPM debug log
+pnpm-debug.log
+
+# Local environment variables
+.env.local
+
+# Git
+.git 

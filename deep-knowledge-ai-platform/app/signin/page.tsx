@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,7 @@ const ERROR_MESSAGES = {
     unexpected_error: 'Có lỗi không mong muốn xảy ra. Vui lòng thử lại.',
 };
 
-export default function AuthPage() {
+function SignInForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { signInWithGoogle, signInWithMagicLink, signInWithGitHub, isAuthenticated, isLoading } = useAuth();
@@ -255,5 +255,20 @@ export default function AuthPage() {
                 </Card>
             </div>
         </div>
+    );
+}
+
+export default function AuthPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center pt-16">
+                <div className="text-center">
+                    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Đang tải trang đăng nhập...</p>
+                </div>
+            </div>
+        }>
+            <SignInForm />
+        </Suspense>
     );
 } 

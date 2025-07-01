@@ -486,16 +486,16 @@ router.post("/ai", authenticate, async (req: AuthRequest, res) => {
         tokens_used: aiData.context_info?.estimated_tokens || 0,
       };
 
-      const { data: savedAiMessage, error: aiMessageError } = await supabase
+      const { data: savedAiMessage } = await supabase
         .from("learning_chats")
         .insert([aiMessage])
         .select()
         .single();
 
-      if (aiMessageError) {
-        console.error("Error saving AI message:", aiMessageError);
-        // Continue anyway - AI response was generated
-      }
+      // if (aiMessageError) {
+      //   console.error("Error saving AI message:", aiMessageError);
+      //   // Continue anyway - AI response was generated
+      // }
 
       // Return both messages and session info
       return res.json({
@@ -834,12 +834,11 @@ router.post("/ai-stream", authenticate, async (req: AuthRequest, res) => {
                   tokens_used: sessionData.context_info?.estimated_tokens || 0,
                 };
 
-                const { data: savedAiMessage, error: aiMessageError } =
-                  await supabase
-                    .from("learning_chats")
-                    .insert([aiMessage])
-                    .select()
-                    .single();
+                const { data: savedAiMessage } = await supabase
+                  .from("learning_chats")
+                  .insert([aiMessage])
+                  .select()
+                  .single();
 
                 // Send completion with saved message
                 const responseData = {

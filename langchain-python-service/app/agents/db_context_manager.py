@@ -3,6 +3,7 @@ import asyncpg
 import os
 import time
 import re
+import json
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 from loguru import logger
@@ -13,6 +14,8 @@ from app.agents.context_manager import Message, ContextPackage, SessionSummary, 
 from app.agents.content_compressor import ContentCompressor, ContentType
 from app.agents.context_quality_analyzer import ContextQualityAnalyzer, ContextMetrics
 from app.agents.performance_monitor import PerformanceMonitor
+from app.models.llm_config import LLMConfig
+from app.services.cache_manager import cache_manager
 
 class DatabaseContextManager:
     """PostgreSQL-based context manager with smart single context optimization"""
@@ -990,7 +993,13 @@ class DatabaseContextManager:
             return {"error": "Failed to generate optimization report", "details": str(e)}
 
     async def _get_structural_context_data(self, session_id: str) -> Dict[str, Optional[str]]:
-        """Gets the topic and node context (title, description) for the session as a dictionary."""
+        """Gets the topic and node context (title, description) for the session as a dictionary, with caching."""
+        
+        cache_key = f"structural_context:{session_id}"
+        cached_context = await cache_manager.get_json(cache_key)
+        if cached_context is not None:
+            return cached_context
+
         if not self.db_pool:
             return {"text": None, "topic_title": None, "node_title": None}
         
@@ -1009,28 +1018,33 @@ class DatabaseContextManager:
                     WHERE cs.id = $1
                 """, session_id)
 
+                data_to_cache: Dict[str, Optional[str]]
                 if not row:
-                    return {"text": None, "topic_title": None, "node_title": None}
+                    data_to_cache = {"text": None, "topic_title": None, "node_title": None}
+                else:
+                    parts = []
+                    if row['topic_title']:
+                        parts.append(f"Chủ đề chính: '{row['topic_title']}'.")
+                        if row['topic_description']:
+                            parts.append(f"Mô tả chủ đề: {row['topic_description']}")
 
-                parts = []
-                if row['topic_title']:
-                    parts.append(f"Chủ đề chính: '{row['topic_title']}'.")
-                    if row['topic_description']:
-                         parts.append(f"Mô tả chủ đề: {row['topic_description']}")
+                    if row['node_title']:
+                        parts.append(f"Mục đang học: '{row['node_title']}'.")
+                        if row['node_description']:
+                            parts.append(f"Chi tiết mục: {row['node_description']}")
+                    
+                    context_text = " ".join(parts) if parts else None
+                    
+                    data_to_cache = {
+                        "text": context_text,
+                        "topic_title": row['topic_title'],
+                        "node_title": row['node_title']
+                    }
+                
+                logger.info(f"Retrieved structural context for session {session_id} from DB.")
+                await cache_manager.set_json(cache_key, data_to_cache, ttl=3600) # Cache for 1 hour
+                return data_to_cache
 
-                if row['node_title']:
-                    parts.append(f"Mục đang học: '{row['node_title']}'.")
-                    if row['node_description']:
-                        parts.append(f"Chi tiết mục: {row['node_description']}")
-                
-                context_text = " ".join(parts) if parts else None
-                logger.info(f"Retrieved structural context for session {session_id}")
-                
-                return {
-                    "text": context_text,
-                    "topic_title": row['topic_title'],
-                    "node_title": row['node_title']
-                }
         except Exception as e:
             logger.error(f"Error getting structural context for session {session_id}: {e}")
             return {"text": None, "topic_title": None, "node_title": None} 

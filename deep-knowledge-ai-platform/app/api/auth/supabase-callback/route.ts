@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 
-export async function GET(request: NextRequest) {
+const getRedirectUrl = (path: string) => {
+  const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+  return new URL(path, baseUrl);
+};
 
+export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const error = searchParams.get("error");
@@ -12,8 +16,6 @@ export async function GET(request: NextRequest) {
   const access_token = searchParams.get("access_token");
   const refresh_token = searchParams.get("refresh_token");
 
-
-
   // Xử lý lỗi từ Supabase
   if (error) {
     console.error(
@@ -22,11 +24,10 @@ export async function GET(request: NextRequest) {
       error_description
     );
     return NextResponse.redirect(
-      new URL(
+      getRedirectUrl(
         `/signin?error=callback_error&message=${encodeURIComponent(
           error_description || error
-        )}`,
-        request.url
+        )}`
       )
     );
   }
@@ -37,14 +38,13 @@ export async function GET(request: NextRequest) {
       "❌ [AUTH ERROR] Missing both code and access_token in callback"
     );
     return NextResponse.redirect(
-      new URL("/signin?error=missing_auth_params", request.url)
+      getRedirectUrl("/signin?error=missing_auth_params")
     );
   }
 
   try {
     const supabase = createServerClient();
     let supabaseUser;
-
 
     if (code) {
       // Flow cũ: đổi code thành session
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
           authError
         );
         return NextResponse.redirect(
-          new URL("/signin?error=exchange_failed", request.url)
+          getRedirectUrl("/signin?error=exchange_failed")
         );
       }
 
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
           authError
         );
         return NextResponse.redirect(
-          new URL("/signin?error=session_failed", request.url)
+          getRedirectUrl("/signin?error=session_failed")
         );
       }
 
@@ -86,10 +86,9 @@ export async function GET(request: NextRequest) {
         "❌ [AUTH ERROR] Neither code nor tokens available for authentication"
       );
       return NextResponse.redirect(
-        new URL("/signin?error=no_auth_method", request.url)
+        getRedirectUrl("/signin?error=no_auth_method")
       );
     }
-
 
     // Kiểm tra xem user profile đã tồn tại chưa
     const { data: existingProfile, error: fetchError } = await supabase
@@ -104,7 +103,7 @@ export async function GET(request: NextRequest) {
       // PGRST116 = no rows returned
       console.error("❌ [DB ERROR] Error fetching user profile:", fetchError);
       return NextResponse.redirect(
-        new URL("/signin?error=database_error", request.url)
+        getRedirectUrl("/signin?error=database_error")
       );
     }
 
@@ -138,7 +137,7 @@ export async function GET(request: NextRequest) {
           updateError
         );
         return NextResponse.redirect(
-          new URL("/signin?error=update_failed", request.url)
+          getRedirectUrl("/signin?error=update_failed")
         );
       }
 
@@ -173,7 +172,7 @@ export async function GET(request: NextRequest) {
           createError
         );
         return NextResponse.redirect(
-          new URL("/signin?error=create_failed", request.url)
+          getRedirectUrl("/signin?error=create_failed")
         );
       }
 
@@ -192,21 +191,17 @@ export async function GET(request: NextRequest) {
       },
     };
 
-
     try {
       // Gọi backend để tạo JWT token
       const backendUrl = `${
         process.env.NEXT_PUBLIC_API_GATEWAY_URL || "http://localhost:8080"
       }/api/auth/supabase-callback`;
 
-
       const backendResponse = await fetch(backendUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user: userData }),
       });
-
-
 
       if (!backendResponse.ok) {
         const errorData = await backendResponse.text();
@@ -215,28 +210,25 @@ export async function GET(request: NextRequest) {
           error: errorData,
         });
         return NextResponse.redirect(
-          new URL("/signin?error=backend_auth_failed", request.url)
+          getRedirectUrl("/signin?error=backend_auth_failed")
         );
       }
 
       const responseData = await backendResponse.json();
-
 
       const { token, user } = responseData;
 
       if (!token) {
         console.error("❌ [BACKEND ERROR] No JWT token received from backend");
         return NextResponse.redirect(
-          new URL("/signin?error=no_jwt_token", request.url)
+          getRedirectUrl("/signin?error=no_jwt_token")
         );
       }
 
       // Redirect đến signin success page với user data để NextAuth xử lý
-      const successUrl = new URL("/signin/callback", request.url);
+      const successUrl = getRedirectUrl("/signin/callback");
       successUrl.searchParams.set("user", JSON.stringify(user));
       successUrl.searchParams.set("token", token);
-
-
 
       return NextResponse.redirect(successUrl);
     } catch (backendError) {
@@ -245,7 +237,7 @@ export async function GET(request: NextRequest) {
         backendError
       );
       return NextResponse.redirect(
-        new URL("/signin?error=backend_connection_failed", request.url)
+        getRedirectUrl("/signin?error=backend_connection_failed")
       );
     }
   } catch (error) {
@@ -254,7 +246,7 @@ export async function GET(request: NextRequest) {
       error
     );
     return NextResponse.redirect(
-      new URL("/signin?error=unexpected_error", request.url)
+      getRedirectUrl("/signin?error=unexpected_error")
     );
   }
 }

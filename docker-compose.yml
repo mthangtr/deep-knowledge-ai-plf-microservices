@@ -1,6 +1,20 @@
 version: "3.8"
 
 services:
+  # Frontend Service (Next.js)
+  frontend:
+    build:
+      context: ./deep-knowledge-ai-platform
+      dockerfile: Dockerfile
+    container_name: deep-knowledge-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+    networks:
+      - deep-knowledge-network
+
   # Backend Main Service
   backend-main:
     build: ./backend-main
@@ -10,6 +24,7 @@ services:
       - "3001:3001"
     environment:
       PORT: 3001
+      FRONTEND_URL: http://localhost:3000
       NODE_ENV: production
       JWT_SECRET: kNFNj0uQCVzdBoVKAbAKUUTf0JPtYqlD
       SUPABASE_URL: https://jkykheapwyozbztnntph.supabase.co
@@ -38,6 +53,7 @@ services:
       FORCE_OPENAI: "false"
       OPENAI_API_KEY: "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"
       DATABASE_URL: "postgresql://postgres.jkykheapwyozbztnntph:Thang979712*@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres"
+      REDIS_URL: redis://redis:6379/0
     networks:
       - deep-knowledge-network
 
@@ -58,6 +74,21 @@ services:
       - langchain-python
     networks:
       - deep-knowledge-network
+
+  redis:
+    image: "redis:alpine"
+    container_name: redis_cache
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - deep-knowledge-network
+
+volumes:
+  postgres_data:
+  redis_data:
 
 networks:
   deep-knowledge-network:
