@@ -25,6 +25,9 @@ class ContextPackage(BaseModel):
     summary: Optional[str] = None
     relevant: List[Message] = []
     historical: List[Message] = []
+    structural_context: Optional[str] = None
+    topic_title: Optional[str] = None
+    node_title: Optional[str] = None
     context_type: ContextNeedType
     total_tokens_estimate: int = 0
 

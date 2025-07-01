@@ -26,6 +26,39 @@ Multi-agent LLM service với **Smart Single Context** optimization và OpenRout
 - ✅ **Monitoring Dashboard** - Complete system health overview
 - ✅ **Stress Testing** - Load testing với automatic alert triggering
 
+### 🆕 Phase 2: Intelligent Routing & Dynamic Personas
+
+- ✅ **Intelligent Model Routing**: Tự động chọn model tối ưu (chi phí/hiệu năng) dựa trên lĩnh vực chuyên môn (Lập trình, Khoa học,...) và độ phức tạp của câu hỏi.
+- ✅ **Dynamic Persona Engine**: Agent có thể thay đổi "tính cách" (Mentor, Sáng tạo, Kỹ sư) để phù hợp với ngữ cảnh cuộc trò chuyện.
+- ✅ **Structural Context Awareness**: Agent "hiểu" được bối cảnh bài học (chủ đề, mục đang học) để đưa ra câu trả lời liên quan hơn.
+
+#### Intelligent Routing Flow
+
+```mermaid
+graph TD
+    subgraph "1. Input Layer"
+        A[User Message + Session Info]
+    end
+
+    subgraph "2. Context & Routing Layer"
+        A --> B{Lightweight Router};
+        B -- Standalone? --> C[Skip Context];
+        B -- Needs Context --> D[DB Context Manager];
+        D --> E[ContextPackage];
+        E --> F[Persona Engine];
+        E --> G[Model Router];
+        F -- Persona --> H[Prompt Builder];
+        G -- Selected Model --> H;
+        E -- Context Info --> H;
+    end
+
+    subgraph "3. Execution Layer"
+        H --> I[Orchestrator];
+        I --> J[LLM API];
+        J --> K[Streaming Response];
+    end
+```
+
 ## 🧠 Smart Context System
 
 ### Context Decision Tree

@@ -2,6 +2,7 @@ import asyncio
 import asyncpg
 import os
 import time
+import re
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 from loguru import logger
@@ -31,6 +32,16 @@ class DatabaseContextManager:
             'full': 2000
         }
         logger.info("Database Context Manager initialized with a simplified, more robust context strategy.")
+        # Lightweight Router patterns
+        self.standalone_patterns = [
+            r"^(xin )?chào",
+            r"bạn là ai",
+            r"hello",
+            r"hi there",
+            r"kể.*chuyện cười",
+            r"bắt đầu lại",
+            r"làm mới cuộc trò chuyện"
+        ]
     
     async def init_db(self):
         """Initialize PostgreSQL connection pool and start monitoring"""
@@ -137,6 +148,31 @@ class DatabaseContextManager:
         """Get smart context with a simplified, more robust strategy."""
         context_start_time = time.time()
         
+        # --- LIGHTWEIGHT ROUTER ---
+        for pattern in self.standalone_patterns:
+            if re.search(pattern, message.lower()):
+                logger.info(f"Standalone message detected (pattern: '{pattern}'). Skipping context retrieval.")
+                context_package = await self._build_minimal_context(session_id)
+                
+                from app.agents.context_quality_analyzer import QualityScore
+                quality_metrics = ContextMetrics(
+                    relevance_score=1.0,  # Standalone is perfectly relevant to itself
+                    completeness_score=1.0, # No context needed, so it's complete
+                    efficiency_score=1.0, # Most efficient
+                    coherence_score=1.0,
+                    freshness_score=1.0,
+                    overall_quality=1.0,
+                    quality_level=QualityScore.EXCELLENT,
+                    processing_time=time.time() - context_start_time,
+                    token_usage=0,
+                    compression_ratio=0,
+                    context_type=ContextNeedType.NONE,
+                    message_count=0,
+                    session_length=0,
+                    timestamp=datetime.now()
+                )
+                return context_package, quality_metrics
+
         try:
             # SIMPLIFIED LOGIC: Always fetch a good amount of context.
             # No more router agent, which can be unreliable.
@@ -144,8 +180,11 @@ class DatabaseContextManager:
             # 1. Get a solid base of recent messages and any existing summary.
             recent_messages_task = self._get_recent_messages_db(session_id, self.recent_messages_limit)
             summary_task = self._get_session_summary_db(session_id)
+            structural_context_task = self._get_structural_context_data(session_id)
             
-            recent_messages_db, summary = await asyncio.gather(recent_messages_task, summary_task)
+            recent_messages_db, summary, structural_context_data = await asyncio.gather(
+                recent_messages_task, summary_task, structural_context_task
+            )
 
             # 2. Build the context package directly.
             converted_messages = self._convert_to_messages(recent_messages_db)
@@ -153,6 +192,9 @@ class DatabaseContextManager:
             context_package = ContextPackage(
                 recent=converted_messages,
                 summary=summary,
+                structural_context=structural_context_data.get("text"),
+                topic_title=structural_context_data.get("topic_title"),
+                node_title=structural_context_data.get("node_title"),
                 relevant=[],
                 historical=[],
                 context_type=ContextNeedType.FULL_CONTEXT
@@ -945,4 +987,50 @@ class DatabaseContextManager:
             }
         except Exception as e:
             logger.error(f"Error generating optimization report: {e}")
-            return {"error": "Failed to generate optimization report", "details": str(e)} 
+            return {"error": "Failed to generate optimization report", "details": str(e)}
+
+    async def _get_structural_context_data(self, session_id: str) -> Dict[str, Optional[str]]:
+        """Gets the topic and node context (title, description) for the session as a dictionary."""
+        if not self.db_pool:
+            return {"text": None, "topic_title": None, "node_title": None}
+        
+        try:
+            async with self.db_pool.acquire() as conn:
+                # This query joins chat_sessions with topics and nodes to get all info in one go.
+                row = await conn.fetchrow("""
+                    SELECT 
+                        lt.title as topic_title,
+                        lt.description as topic_description,
+                        tn.title as node_title,
+                        tn.description as node_description
+                    FROM chat_sessions cs
+                    LEFT JOIN learning_topics lt ON cs.topic_id = lt.id
+                    LEFT JOIN tree_nodes tn ON cs.node_id = tn.id
+                    WHERE cs.id = $1
+                """, session_id)
+
+                if not row:
+                    return {"text": None, "topic_title": None, "node_title": None}
+
+                parts = []
+                if row['topic_title']:
+                    parts.append(f"Chủ đề chính: '{row['topic_title']}'.")
+                    if row['topic_description']:
+                         parts.append(f"Mô tả chủ đề: {row['topic_description']}")
+
+                if row['node_title']:
+                    parts.append(f"Mục đang học: '{row['node_title']}'.")
+                    if row['node_description']:
+                        parts.append(f"Chi tiết mục: {row['node_description']}")
+                
+                context_text = " ".join(parts) if parts else None
+                logger.info(f"Retrieved structural context for session {session_id}")
+                
+                return {
+                    "text": context_text,
+                    "topic_title": row['topic_title'],
+                    "node_title": row['node_title']
+                }
+        except Exception as e:
+            logger.error(f"Error getting structural context for session {session_id}: {e}")
+            return {"text": None, "topic_title": None, "node_title": None} 

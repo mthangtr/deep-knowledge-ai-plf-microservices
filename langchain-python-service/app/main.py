@@ -15,6 +15,8 @@ from app.models.llm_config import LLMConfig
 from app.agents.multi_agent import MultiAgentOrchestrator
 from app.agents.db_context_manager import DatabaseContextManager
 from app.prompts.core_prompts import MASTER_SYSTEM_PROMPT
+from app.prompts.personas import SOCRATIC_MENTOR, CREATIVE_EXPLORER, PRAGMATIC_ENGINEER
+from app.services.model_router_service import model_router
 
 load_dotenv()
 
@@ -181,14 +183,37 @@ async def smart_chat(request: SmartChatRequest):
                 user_id=request.user_id,
                 message=request.message
             )
+
+            # --- MODEL ROUTER ---
+            selected_model, domain, tier = model_router.select_model(
+                user_message=request.message,
+                topic_title=context_package.topic_title,
+                node_title=context_package.node_title
+            )
             
             # Build a structured history string for the prompt
             history_str = "\n".join(
                 [f"{msg.role}: {msg.content}" for msg in context_package.recent]
             )
+
+            # --- PERSONA ENGINE ---
+            user_message_lower = request.message.lower()
+            selected_persona = SOCRATIC_MENTOR  # Default
+            persona_name = "Socratic Mentor"
+
+            if "giải thích đơn giản" in user_message_lower or "ví dụ vui" in user_message_lower or "thú vị" in user_message_lower:
+                selected_persona = CREATIVE_EXPLORER
+                persona_name = "Creative Explorer"
+            elif "lỗi" in user_message_lower or "tối ưu" in user_message_lower or "step-by-step" in user_message_lower or "cụ thể" in user_message_lower:
+                selected_persona = PRAGMATIC_ENGINEER
+                persona_name = "Pragmatic Engineer"
+            
+            logger.info(f"Persona selected: {persona_name}")
             
             # Format the master system prompt
             system_prompt = MASTER_SYSTEM_PROMPT.format(
+                persona_description=selected_persona,
+                topic_context=context_package.structural_context or "Không có thông tin về chủ đề hoặc mục học hiện tại.",
                 summary=context_package.summary or "Không có",
                 history=history_str or "Không có",
                 user_message=request.message
@@ -208,13 +233,19 @@ async def smart_chat(request: SmartChatRequest):
                     "quality_level": quality_metrics.quality_level.value,
                     "relevance_score": quality_metrics.relevance_score,
                     "efficiency_score": quality_metrics.efficiency_score,
-                    "processing_time_ms": quality_metrics.processing_time * 1000
+                    "processing_time_ms": quality_metrics.processing_time * 1000,
+                    "persona_used": persona_name,
+                    "model_used": selected_model,
+                    "routing_info": {
+                        "domain": domain.value,
+                        "tier": tier.value
+                    }
                 }
             }
             yield f"data: {json.dumps(metadata)}\n\n"
             
             # Generate streaming AI response
-            logger.info(f"Starting streaming with model: {request.model}")
+            logger.info(f"Starting streaming with model: {selected_model}")
             
             try:
                 # Get the async generator instance
@@ -222,11 +253,10 @@ async def smart_chat(request: SmartChatRequest):
                     message=request.message,
                     context=[],
                     system_prompt=system_prompt,
-                    options={"model": request.model}
+                    options={"model": selected_model}
                 )
                 
                 full_response = ""
-                model_used = request.model or "google/gemini-2.0-flash-lite-001"
                 
                 # Stream response chunks by iterating over the generator
                 async for chunk_content in stream_generator:
@@ -247,7 +277,7 @@ async def smart_chat(request: SmartChatRequest):
                 # Record performance metrics
                 await db_context_manager.record_performance_metrics(
                     response_time=processing_time,
-                    model_used=model_used,
+                    model_used=selected_model,
                     context_metrics=quality_metrics,
                     error=False
                 )
@@ -256,7 +286,7 @@ async def smart_chat(request: SmartChatRequest):
                 completion = {
                     "type": "done",
                     "full_response": full_response,
-                    "model_used": model_used,
+                    "model_used": selected_model,
                     "processing_time": processing_time,
                     "session_stats": serialize_datetime_objects(session_stats)
                 }

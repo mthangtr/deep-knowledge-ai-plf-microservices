@@ -9,6 +9,16 @@ class LLMConfig:
     
     # Available models với metadata
     AVAILABLE_MODELS = {
+        "openai/gpt-4o-mini": {
+            "provider": "OpenAI",
+            "supports_streaming": True,
+            "supports_non_streaming": True,
+            "context_window": 128000,
+            "max_output": 16000,
+            "cost_per_mtok_input": 0.15,
+            "cost_per_mtok_output": 0.60,
+            "warm_up_time": "fast"
+        },
         "google/gemini-2.0-flash-lite-001": {
             "provider": "OpenRouter",
             "supports_streaming": True,
@@ -25,9 +35,29 @@ class LLMConfig:
             "supports_non_streaming": True,
             "context_window": 1048576,
             "max_output": 8192,
-            "cost_per_mtok_input": 0.075,
-            "cost_per_mtok_output": 0.3,
+            "cost_per_mtok_input": 0.30,
+            "cost_per_mtok_output": 2.50,
             "warm_up_time": "fast"
+        },
+        "google/gemini-2.5-pro": {
+            "provider": "OpenRouter",
+            "supports_streaming": True,
+            "supports_non_streaming": True,
+            "context_window": 1048576,
+            "max_output": 66000,
+            "cost_per_mtok_input": 1.25,
+            "cost_per_mtok_output": 10.0,
+            "warm_up_time": "medium"
+        },
+        "anthropic/claude-3-sonnet-20240229": {
+            "provider": "OpenRouter",
+            "supports_streaming": True,
+            "supports_non_streaming": True,
+            "context_window": 200000,
+            "max_output": 64000,
+            "cost_per_mtok_input": 3.0,
+            "cost_per_mtok_output": 15.0,
+            "warm_up_time": "medium"
         },
         "deepseek/deepseek-r1-0528:free": {
             "provider": "OpenRouter",
@@ -44,7 +74,7 @@ class LLMConfig:
     @staticmethod
     def get_default_model() -> str:
         """Get default model name"""
-        return "google/gemini-2.0-flash-lite-001"
+        return "openai/gpt-4o-mini"
     
     @staticmethod
     def get_llm(
@@ -57,7 +87,7 @@ class LLMConfig:
     ) -> ChatOpenAI:
         """Factory method để tạo OpenRouter LLM instance"""
         model = model_name or LLMConfig.get_default_model()
-        model_config = LLMConfig.AVAILABLE_MODELS.get(model, LLMConfig.AVAILABLE_MODELS["google/gemini-2.0-flash-lite-001"])
+        model_config = LLMConfig.AVAILABLE_MODELS.get(model, LLMConfig.AVAILABLE_MODELS[LLMConfig.get_default_model()])
         
         return LLMConfig._create_openrouter_llm(
             model=model,
