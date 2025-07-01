@@ -21,13 +21,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useLearningChat } from "@/hooks/use-learning-chat";
 
 interface ChatDebatePanelProps {
     selectedTopic: LearningTopic | null;
-    messages: ChatMessage[];
-    onSendMessage: (content: string) => void;
+    selectedNode?: { id: string; title: string } | null;
     onAddToNotes: (messageId: string) => void;
-    sending?: boolean;
 }
 
 // Memoized component để format AI response - CRITICAL cho performance
@@ -198,90 +197,95 @@ MessageItem.displayName = 'MessageItem';
 
 export function ChatDebatePanel({
     selectedTopic,
-    messages,
-    onSendMessage,
+    selectedNode = null,
     onAddToNotes,
-    sending = false
 }: ChatDebatePanelProps) {
     const [inputValue, setInputValue] = useState('');
-    const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-    // Memoized scroll function để tránh re-create
-    const scrollToBottom = useCallback(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, []);
+    // Use streaming chat hook
+    const {
+        messages: learningChatMessages,
+        loading,
+        sending: learningChatSending,
+        error,
+        sendMessageStream,
+        clearMessages,
+    } = useLearningChat(selectedTopic?.id, selectedNode?.id);
 
-    // Optimize scroll effect - chỉ scroll khi messages thực sự thay đổi
+    // Convert LearningChat to ChatMessage format
+    const convertToDisplayMessages = (learningMessages: any[]): ChatMessage[] => {
+        return learningMessages.map((msg) => ({
+            id: msg.id,
+            topicId: msg.topic_id,
+            role: msg.is_ai_response ? 'mentor' : 'user',
+            content: msg.message,
+            timestamp: new Date(msg.created_at),
+            canAddToNotes: msg.is_ai_response,
+            isMarkedForNotes: false,
+            isStreaming: msg.isStreaming || false
+        }));
+    };
+
+    const displayMessages = convertToDisplayMessages(learningChatMessages);
+
+    // Handle auto-scrolling when messages change
     useEffect(() => {
-        const timeoutId = setTimeout(scrollToBottom, 100);
-        return () => clearTimeout(timeoutId);
-    }, [messages.length, scrollToBottom]); // Chỉ theo dõi length, không phải toàn bộ array
+        if (scrollAreaRef.current) {
+            const scrollElement = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+            if (scrollElement) {
+                scrollElement.scrollTop = scrollElement.scrollHeight;
+            }
+        }
+    }, [displayMessages]);
 
-    // Memoized handlers
-    const handleSubmit = useCallback((e: React.FormEvent) => {
-        e.preventDefault();
-        if (!inputValue.trim() || !selectedTopic || sending) return;
-
-        onSendMessage(inputValue.trim());
-        setInputValue('');
-    }, [inputValue, selectedTopic, sending, onSendMessage]);
-
-    const handleCopyMessage = useCallback((content: string) => {
-        navigator.clipboard.writeText(content);
+    // Memoize handlers để prevent unnecessary re-renders
+    const handleCopyMessage = useCallback(async (content: string) => {
+        try {
+            await navigator.clipboard.writeText(content);
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+        }
     }, []);
 
-    // Memoized empty state
-    const emptyState = useMemo(() => (
-        <div className="flex flex-col items-center justify-center h-full bg-gradient-to-br from-background to-muted/20 text-muted-foreground">
-            <div className="text-center space-y-4 max-w-md">
-                <div className="w-16 h-16 mx-auto bg-primary/10 rounded-full flex items-center justify-center">
-                    <MessageSquare className="h-8 w-8 text-primary" />
-                </div>
-                <h3 className="text-xl font-semibold text-foreground">Chọn chủ đề để bắt đầu</h3>
-                <p className="text-sm leading-relaxed">
-                    Tạo chủ đề mới hoặc chọn từ danh sách bên trái để bắt đầu cuộc đối thoại với AI Mentor
-                </p>
-            </div>
-        </div>
-    ), []);
+    const handleAddToNotes = useCallback((messageId: string) => {
+        onAddToNotes(messageId);
+    }, [onAddToNotes]);
 
-    // Memoized quick suggestions
-    const quickSuggestions = useMemo(() => {
-        if (!selectedTopic) return null;
+    // Form submission handler
+    const handleSubmit = useCallback(async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!inputValue.trim() || learningChatSending) return;
 
-        return (
-            <div className="flex flex-wrap gap-2 justify-center">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-full"
-                    onClick={() => onSendMessage(`Giải thích cơ bản về ${selectedTopic.title}`)}
-                >
-                    Giải thích cơ bản
-                </Button>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-full"
-                    onClick={() => onSendMessage(`Ưu nhược điểm của ${selectedTopic.title} là gì?`)}
-                >
-                    Ưu nhược điểm
-                </Button>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-full"
-                    onClick={() => onSendMessage(`Ứng dụng thực tế của ${selectedTopic.title}`)}
-                >
-                    Ứng dụng thực tế
-                </Button>
-            </div>
-        );
-    }, [selectedTopic, onSendMessage]);
+        const message = inputValue.trim();
+        setInputValue('');
+
+        try {
+            // Use streaming method for better UX
+            await sendMessageStream({ message });
+        } catch (error) {
+            console.error("Error sending message:", error);
+        }
+    }, [inputValue, learningChatSending, sendMessageStream]);
+
+    // Fallback to props messages if learning chat is not loaded
+    const finalMessages = learningChatMessages.length > 0 ? displayMessages : [];
 
     if (!selectedTopic) {
-        return emptyState;
+        return (
+            <div className="h-full flex items-center justify-center bg-gradient-to-br from-muted/30 to-background">
+                <div className="text-center p-8">
+                    <MessageSquare className="h-16 w-16 text-muted-foreground/50 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-muted-foreground mb-2">
+                        Chọn chủ đề để bắt đầu thảo luận
+                    </h3>
+                    <p className="text-sm text-muted-foreground max-w-sm">
+                        Hãy chọn một chủ đề từ danh sách bên trái để bắt đầu cuộc hội thoại với AI Mentor.
+                    </p>
+                </div>
+            </div>
+        );
     }
 
     return (
@@ -291,15 +295,16 @@ export function ChatDebatePanel({
                 <div className="flex-1 min-w-0">
                     <h2 className="text-lg font-medium text-foreground truncate">{selectedTopic.title}</h2>
                     <p className="text-sm text-muted-foreground">
-                        AI Mentor • {messages.length} tin nhắn
+                        AI Mentor • {finalMessages.length} tin nhắn
+                        {selectedNode && ` • Node: ${selectedNode.title}`}
                     </p>
                 </div>
             </div>
 
             {/* Messages Area - Clean, spacious */}
-            <ScrollArea className="flex-1">
+            <ScrollArea ref={scrollAreaRef} className="flex-1">
                 <div className="px-4 py-6 space-y-8 max-w-4xl mx-auto">
-                    {messages.length === 0 ? (
+                    {finalMessages.length === 0 ? (
                         <div className="text-center py-12">
                             <div className="bg-gradient-to-br from-muted/50 to-background rounded-2xl p-8 mx-auto max-w-md">
                                 <div className="w-12 h-12 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center">
@@ -309,22 +314,21 @@ export function ChatDebatePanel({
                                 <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
                                     Đặt câu hỏi về "{selectedTopic.title}" để AI Mentor thách thức suy nghĩ của bạn
                                 </p>
-                                {quickSuggestions}
                             </div>
                         </div>
                     ) : (
-                        messages.map((message) => (
+                        finalMessages.map((message) => (
                             <MessageItem
                                 key={message.id}
                                 message={message}
-                                onAddToNotes={onAddToNotes}
+                                onAddToNotes={handleAddToNotes}
                                 onCopyMessage={handleCopyMessage}
                             />
                         ))
                     )}
 
                     {/* Typing Indicator - Modern style */}
-                    {sending && (
+                    {learningChatSending && (
                         <div className="flex gap-4">
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center flex-shrink-0">
                                 <GraduationCap className="h-4 w-4 text-primary-foreground" />
@@ -338,8 +342,6 @@ export function ChatDebatePanel({
                             </div>
                         </div>
                     )}
-
-                    <div ref={messagesEndRef} />
                 </div>
             </ScrollArea>
 
@@ -354,14 +356,14 @@ export function ChatDebatePanel({
                                 onChange={(e) => setInputValue(e.target.value)}
                                 placeholder="Gửi tin nhắn..."
                                 className="rounded-2xl bg-muted/50 border-0 focus:ring-2 focus:ring-primary/20 focus:bg-background pr-12 py-3 text-sm resize-none min-h-[44px]"
-                                disabled={sending}
+                                disabled={learningChatSending}
                             />
                         </div>
                         <Button
                             type="submit"
                             size="icon"
                             className="rounded-full h-11 w-11 shadow-sm"
-                            disabled={!inputValue.trim() || sending}
+                            disabled={!inputValue.trim() || learningChatSending}
                         >
                             <Send className="h-4 w-4" />
                         </Button>

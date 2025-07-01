@@ -1,9 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import os
 import time
+import json
 from datetime import datetime
 from dotenv import load_dotenv
 from loguru import logger
@@ -92,6 +94,18 @@ class MultiAgentResponse(BaseModel):
     agents_used: List[str]
     total_processing_time: float
 
+# Helper function để serialize datetime objects
+def serialize_datetime_objects(obj):
+    """Convert datetime objects to ISO strings for JSON serialization"""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    elif isinstance(obj, dict):
+        return {k: serialize_datetime_objects(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [serialize_datetime_objects(item) for item in obj]
+    else:
+        return obj
+
 @app.get("/")
 async def root():
     return {
@@ -136,147 +150,161 @@ async def chat_single(request: ChatRequest):
         logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/smart-chat", response_model=SmartChatResponse)
+@app.post("/smart-chat")
 async def smart_chat(request: SmartChatRequest):
-    """Smart chat với persistent context management (like ChatGPT)"""
-    import time
+    """Smart chat với streaming response"""
     start_time = time.time()
     
-    try:
-        logger.info(f"Smart chat - User: {request.user_id}, Session: {request.session_id}")
-        logger.info(f"Message: {request.message[:100]}...")
-        
-        # FIXED: Always validate session for topic/node isolation
-        # Let database logic handle proper session isolation instead of blindly reusing frontend session_id
-        session_id = await db_context_manager.get_or_create_session(
-            user_id=request.user_id,
-            topic_id=request.topic_id,
-            node_id=request.node_id,
-            title=f"Chat - {request.message[:50]}..."
-        )
-        
-        if not request.session_id:
-            logger.info(f"Created new session: {session_id}")
-        elif request.session_id != session_id:
-            logger.info(f"Switched to proper session: {session_id} (was: {request.session_id})")
-        else:
-            logger.info(f"Using existing session: {session_id}")
-        
-        # ENHANCED: Get context with quality analysis
-        # Get smart context for this message (không bao gồm message hiện tại)
-        context_package, quality_metrics = await db_context_manager.get_context_for_message(
-            session_id=session_id,
-            user_id=request.user_id,
-            message=request.message
-        )
-        
-        # Build context for LLM - OPTIMIZED: Smart context building
-        llm_context = []
-        
-        # Add recent messages (always include)
-        for msg in context_package.recent:
-            llm_context.append({
-                "role": msg.role,
-                "content": msg.content
-            })
-        
-        # Only add summary if we have many messages to avoid token waste
-        if context_package.summary and len(context_package.recent) > 5:
-            llm_context.insert(0, {
-                "role": "system",
-                "content": f"Tóm tắt cuộc hội thoại trước: {context_package.summary}"
-            })
-        
-        # Only add relevant messages if context type requires it
-        if context_package.context_type == ContextNeedType.SMART_RETRIEVAL:
-            for msg in context_package.relevant[:3]:  # Limit to 3 most relevant
+    async def generate_stream():
+        try:
+            logger.info(f"Smart chat - User: {request.user_id}, Session: {request.session_id}")
+            logger.info(f"Message: {request.message[:100]}...")
+            
+            # FIXED: Always validate session for topic/node isolation
+            session_id = await db_context_manager.get_or_create_session(
+                user_id=request.user_id,
+                topic_id=request.topic_id,
+                node_id=request.node_id,
+                title=f"Chat - {request.message[:50]}..."
+            )
+            
+            if not request.session_id:
+                logger.info(f"Created new session: {session_id}")
+            elif request.session_id != session_id:
+                logger.info(f"Switched to proper session: {session_id} (was: {request.session_id})")
+            else:
+                logger.info(f"Using existing session: {session_id}")
+            
+            # ENHANCED: Get context with quality analysis
+            context_package, quality_metrics = await db_context_manager.get_context_for_message(
+                session_id=session_id,
+                user_id=request.user_id,
+                message=request.message
+            )
+            
+            # Build context for LLM - OPTIMIZED: Smart context building
+            llm_context = []
+            
+            # Add recent messages (always include)
+            for msg in context_package.recent:
                 llm_context.append({
                     "role": msg.role,
-                    "content": f"[Relevant] {msg.content}"
+                    "content": msg.content
                 })
-        
-        # FIXED: Better logging to understand context composition
-        logger.info(f"Context built - Recent: {len(context_package.recent)}, "
-                   f"Relevant: {len(context_package.relevant)}, "
-                   f"Has summary: {context_package.summary is not None}")
-        logger.info(f"Final LLM context messages: {len(llm_context)}")
-        
-        # Generate AI response với context + current message
-        logger.info(f"Calling single_agent_chat with model: {request.model}")
-        
-        try:
-            result = await orchestrator.single_agent_chat(
-                message=request.message,  # Current message để process
-                context=llm_context,      # Context từ history (không chứa current message)
-                options={"model": request.model}
-            )
-            logger.info(f"AI response generated: {len(result['response'])} chars")
-        except Exception as ai_error:
-            logger.error(f"AI generation failed: {ai_error}")
-            # Fallback response
-            result = {
-                "response": "Xin lỗi, tôi đang gặp sự cố kỹ thuật. Hãy thử lại sau.",
-                "model_used": request.model or "fallback",
-                "processing_time": 0.1,
-                "agent_info": {"type": "fallback", "error": str(ai_error)}
+            
+            # Only add summary if we have many messages to avoid token waste
+            if context_package.summary and len(context_package.recent) > 5:
+                llm_context.insert(0, {
+                    "role": "system",
+                    "content": f"Tóm tắt cuộc hội thoại trước: {context_package.summary}"
+                })
+            
+            # Only add relevant messages if context type requires it
+            if context_package.context_type == ContextNeedType.SMART_RETRIEVAL:
+                for msg in context_package.relevant[:3]:  # Limit to 3 most relevant
+                    llm_context.append({
+                        "role": msg.role,
+                        "content": f"[Relevant] {msg.content}"
+                    })
+            
+            # Send initial metadata
+            metadata = {
+                "type": "metadata",
+                "session_id": session_id,
+                "context_info": {
+                    "context_type": context_package.context_type.value,
+                    "recent_messages_count": len(context_package.recent),
+                    "relevant_messages_count": len(context_package.relevant),
+                    "has_summary": context_package.summary is not None,
+                    "estimated_tokens": context_package.total_tokens_estimate,
+                    "quality_score": quality_metrics.overall_quality,
+                    "quality_level": quality_metrics.quality_level.value,
+                    "relevance_score": quality_metrics.relevance_score,
+                    "efficiency_score": quality_metrics.efficiency_score,
+                    "processing_time_ms": quality_metrics.processing_time * 1000
+                }
             }
-        
-        # REMOVED: Don't save messages to DB - Backend handles this
-        # Backend is responsible for saving both user and AI messages
-        # This service only processes and returns AI responses
-        logger.info(f"Skipping message save - Backend handles persistence")
-        
-        # Get session stats
-        session_stats = await db_context_manager.get_session_stats(session_id)
-        
-        processing_time = time.time() - start_time
-        
-        # ENHANCED: Record performance metrics for monitoring
-        await db_context_manager.record_performance_metrics(
-            response_time=processing_time,
-            model_used=result["model_used"],
-            context_metrics=quality_metrics,
-            error=False
-        )
-        
-        return SmartChatResponse(
-            response=result["response"],
-            model_used=result["model_used"],
-            processing_time=processing_time,
-            context_info={
-                "context_type": context_package.context_type.value,
-                "recent_messages_count": len(context_package.recent),
-                "relevant_messages_count": len(context_package.relevant),
-                "has_summary": context_package.summary is not None,
-                "estimated_tokens": context_package.total_tokens_estimate,
-                # NEW: Quality metrics
-                "quality_score": quality_metrics.overall_quality,
-                "quality_level": quality_metrics.quality_level.value,
-                "relevance_score": quality_metrics.relevance_score,
-                "efficiency_score": quality_metrics.efficiency_score,
-                "processing_time_ms": quality_metrics.processing_time * 1000
-            },
-            session_stats=session_stats,
-            session_id=session_id
-        )
-        
-    except Exception as e:
-        logger.error(f"Smart chat error: {e}")
-        
-        # Record error metrics if possible
-        try:
-            processing_time = time.time() - start_time if 'start_time' in locals() else 0.0
-            if 'quality_metrics' in locals() and quality_metrics is not None:
+            yield f"data: {json.dumps(metadata)}\n\n"
+            
+            # Generate streaming AI response
+            logger.info(f"Starting streaming with model: {request.model}")
+            
+            try:
+                # Get streaming LLM instance
+                result = await orchestrator.single_agent_chat_stream(
+                    message=request.message,
+                    context=llm_context,
+                    options={"model": request.model}
+                )
+                
+                full_response = ""
+                model_used = request.model or "google/gemini-2.0-flash-lite-001"
+                
+                # Stream response chunks
+                async for chunk_content in result["stream"]:
+                    if chunk_content:
+                        full_response += chunk_content
+                        
+                        chunk_data = {
+                            "type": "content",
+                            "content": chunk_content
+                        }
+                        yield f"data: {json.dumps(chunk_data)}\n\n"
+                
+                # Get session stats
+                session_stats = await db_context_manager.get_session_stats(session_id)
+                
+                processing_time = time.time() - start_time
+                
+                # Record performance metrics
                 await db_context_manager.record_performance_metrics(
                     response_time=processing_time,
-                    model_used=request.model or "unknown",
+                    model_used=model_used,
                     context_metrics=quality_metrics,
-                    error=True
+                    error=False
                 )
-        except Exception as perf_error:
-            logger.debug(f"Could not record error metrics: {perf_error}")
-        
-        raise HTTPException(status_code=500, detail=str(e))
+                
+                # Send completion signal
+                completion = {
+                    "type": "done",
+                    "full_response": full_response,
+                    "model_used": model_used,
+                    "processing_time": processing_time,
+                    "session_stats": serialize_datetime_objects(session_stats)
+                }
+                yield f"data: {json.dumps(completion)}\n\n"
+                
+            except Exception as ai_error:
+                logger.error(f"AI generation failed: {ai_error}")
+                # Send error response
+                error_data = {
+                    "type": "error",
+                    "error": "Xin lỗi, tôi đang gặp sự cố kỹ thuật. Hãy thử lại sau.",
+                    "details": str(ai_error)
+                }
+                yield f"data: {json.dumps(error_data)}\n\n"
+                
+        except Exception as e:
+            logger.error(f"Smart chat error: {e}")
+            error_data = {
+                "type": "error",
+                "error": "Lỗi hệ thống, vui lòng thử lại",
+                "details": str(e)
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
+    
+    return StreamingResponse(
+        generate_stream(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/plain; charset=utf-8",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization"
+        }
+    )
 
 @app.post("/multi-agent", response_model=MultiAgentResponse)
 async def multi_agent_conversation(request: MultiAgentRequest):

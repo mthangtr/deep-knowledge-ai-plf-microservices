@@ -35,13 +35,17 @@ export interface TreeNode {
 
 export interface LearningChat {
   id: string;
-  topic_id: string; // Reference to learning_topics.id - REQUIRED
-  node_id?: string; // Reference to tree_nodes.id - OPTIONAL (null = topic-level chat)
-  user_id?: string;
+  topic_id: string;
+  node_id?: string | null;
+  user_id: string;
   message: string;
   is_ai_response: boolean;
-  message_type: "normal" | "auto_prompt" | "system";
+  message_type: "normal" | "auto_prompt";
   created_at: string;
+  session_id?: string | null;
+  model_used?: string | null;
+  tokens_used?: number | null;
+  isStreaming?: boolean; // Optional flag for UI streaming state
 }
 
 export interface LearningNote {

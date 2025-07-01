@@ -463,7 +463,7 @@ router.post("/ai", authenticate, async (req: AuthRequest, res) => {
           message: message,
           topic_id: topic_id,
           node_id: node_id || null,
-          model: "google/gemini-2.5-flash", // Default model
+          model: "google/gemini-2.0-flash-lite-001", // Default model
         }),
       });
 
@@ -676,6 +676,218 @@ router.get("/sessions", authenticate, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error("Server error:", error);
     return res.status(500).json({
+      error: "Internal server error",
+    });
+  }
+});
+
+// POST /api/learning/chat/ai-stream - Streaming AI chat
+router.post("/ai-stream", authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user!.id;
+    const { topic_id, node_id, message, session_id } = req.body;
+
+    // Validate input
+    if (!topic_id || !message) {
+      return res.status(400).json({
+        error: "Missing topic_id or message",
+      });
+    }
+
+    // Verify topic ownership
+    const hasAccess = await validateTopicOwnership(topic_id, userId);
+    if (!hasAccess) {
+      return res.status(403).json({
+        error: "Bạn không có quyền truy cập chủ đề này",
+      });
+    }
+
+    // If node_id provided, verify it belongs to topic
+    if (node_id) {
+      const { data: node, error: nodeError } = await supabase
+        .from("tree_nodes")
+        .select("topic_id")
+        .eq("id", node_id)
+        .eq("topic_id", topic_id)
+        .single();
+
+      if (nodeError || !node) {
+        return res.status(404).json({
+          error: "Node not found or doesn't belong to topic",
+        });
+      }
+    }
+
+    // Save user message to database first
+    const userMessage = {
+      topic_id,
+      node_id: node_id || null,
+      user_id: userId,
+      message: message.trim(),
+      is_ai_response: false,
+      message_type: "normal",
+      session_id: session_id || null,
+    };
+
+    const { data: savedUserMessage, error: userMessageError } = await supabase
+      .from("learning_chats")
+      .insert([userMessage])
+      .select()
+      .single();
+
+    if (userMessageError) {
+      console.error("Error saving user message:", userMessageError);
+      return res.status(500).json({
+        error: "Cannot save user message",
+        details: userMessageError.message,
+      });
+    }
+
+    // Set up streaming headers
+    res.writeHead(200, {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    });
+
+    try {
+      // Call langchain-python service for streaming AI response
+      const langchainUrl =
+        process.env.LANGCHAIN_SERVICE_URL || "http://localhost:5000";
+
+      const aiResponse = await fetch(`${langchainUrl}/smart-chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          session_id: session_id,
+          user_id: userId,
+          message: message,
+          topic_id: topic_id,
+          node_id: node_id || null,
+          model: "google/gemini-2.0-flash-lite-001", // Default model
+        }),
+      });
+
+      if (!aiResponse.ok) {
+        throw new Error(`LangChain service error: ${aiResponse.status}`);
+      }
+
+      // Send user message immediately
+      const userMessageData = {
+        type: "user_message",
+        message: {
+          ...savedUserMessage,
+          created_at: savedUserMessage.created_at
+            ? new Date(savedUserMessage.created_at).toISOString()
+            : new Date().toISOString(),
+          updated_at: savedUserMessage.updated_at
+            ? new Date(savedUserMessage.updated_at).toISOString()
+            : null,
+        },
+      };
+
+      res.write(`data: ${JSON.stringify(userMessageData)}\n\n`);
+
+      // Stream langchain response to frontend
+      let fullAiResponse = "";
+      let sessionData: any = {};
+
+      const reader = aiResponse.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = new TextDecoder().decode(value);
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.type === "metadata") {
+                sessionData = data;
+                // Forward metadata to frontend
+                res.write(`data: ${JSON.stringify(data)}\n\n`);
+              } else if (data.type === "content") {
+                fullAiResponse += data.content;
+                // Forward content chunk to frontend
+                res.write(`data: ${JSON.stringify(data)}\n\n`);
+              } else if (data.type === "done") {
+                // Save AI message to database
+                const aiMessage = {
+                  topic_id,
+                  node_id: node_id || null,
+                  user_id: userId,
+                  message: fullAiResponse,
+                  is_ai_response: true,
+                  message_type: "normal",
+                  session_id: sessionData.session_id || session_id,
+                  model_used: data.model_used,
+                  tokens_used: sessionData.context_info?.estimated_tokens || 0,
+                };
+
+                const { data: savedAiMessage, error: aiMessageError } =
+                  await supabase
+                    .from("learning_chats")
+                    .insert([aiMessage])
+                    .select()
+                    .single();
+
+                // Send completion with saved message
+                const responseData = {
+                  type: "done",
+                  ai_message: savedAiMessage
+                    ? {
+                        ...savedAiMessage,
+                        created_at: savedAiMessage.created_at
+                          ? new Date(savedAiMessage.created_at).toISOString()
+                          : new Date().toISOString(),
+                        updated_at: savedAiMessage.updated_at
+                          ? new Date(savedAiMessage.updated_at).toISOString()
+                          : null,
+                      }
+                    : { message: fullAiResponse },
+                  session_id: sessionData.session_id,
+                  model_used: data.model_used,
+                  processing_time: data.processing_time,
+                };
+
+                res.write(`data: ${JSON.stringify(responseData)}\n\n`);
+              } else if (data.type === "error") {
+                // Forward error to frontend
+                res.write(`data: ${JSON.stringify(data)}\n\n`);
+              }
+            } catch (parseError) {
+              console.error("Error parsing JSON:", parseError);
+            }
+          }
+        }
+      }
+    } catch (aiError) {
+      console.error("LangChain service error:", aiError);
+
+      // Send error response
+      res.write(
+        `data: ${JSON.stringify({
+          type: "error",
+          error: "AI service temporarily unavailable",
+          details: aiError instanceof Error ? aiError.message : "Unknown error",
+        })}\n\n`
+      );
+    } finally {
+      res.end();
+    }
+  } catch (error) {
+    console.error("Server error:", error);
+    res.status(500).json({
       error: "Internal server error",
     });
   }

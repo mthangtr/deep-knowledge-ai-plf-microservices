@@ -60,9 +60,7 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
     const {
         messages,
         loading: chatLoading,
-        sending: chatSending,
         error: chatError,
-        sendMessage,
         createTopicAutoPrompt,
         createNodeAutoPrompt,
         clearError: clearChatError,
@@ -107,7 +105,7 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
         if (typeof window !== 'undefined') {
             (window as any).debugAuth = {
                 logAuthState,
-                clearAuthState, 
+                clearAuthState,
             };
         }
     }, [topics, formattedTopics]);
@@ -194,11 +192,6 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
         setSelectedNodeForChat(null); // Switch back to topic-level chat
     };
 
-    const handleSendMessage = async (content: string) => {
-        if (!selectedTopic) return;
-        await sendMessage({ message: content });
-    };
-
     const handleAddNote = async (content: string) => {
         if (!selectedTopic) return;
         await createNote({
@@ -246,26 +239,21 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
         }
 
         // Hiển thị Chat Panel cho topic hoặc node
-        const currentChatTitle = selectedNodeForChat
-            ? `${selectedTopic.title} > ${selectedNodeForChat.title}`
-            : selectedTopic.title;
-
-        const currentChatIcon = selectedNodeForChat ? '🧠' : '📚';
-
         return (
             <ChatDebatePanel
                 selectedTopic={{
-                    id: selectedNodeForChat?.id || selectedTopic.id,
-                    title: currentChatTitle,
-                    icon: currentChatIcon,
-                    createdAt: new Date(selectedNodeForChat?.created_at || selectedTopic.created_at),
-                    updatedAt: new Date(selectedNodeForChat?.updated_at || selectedTopic.updated_at),
+                    id: selectedTopic.id,
+                    title: selectedTopic.title,
+                    icon: '📚',
+                    createdAt: new Date(selectedTopic.created_at),
+                    updatedAt: new Date(selectedTopic.updated_at),
                     messageCount: formattedMessages.length
                 }}
-                messages={formattedMessages}
-                onSendMessage={handleSendMessage}
+                selectedNode={selectedNodeForChat ? {
+                    id: selectedNodeForChat.id,
+                    title: selectedNodeForChat.title
+                } : null}
                 onAddToNotes={handleAddToNotes}
-                sending={chatSending}
             />
         );
     };

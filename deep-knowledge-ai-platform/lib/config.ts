@@ -26,6 +26,7 @@ export const API_ENDPOINTS = {
     messages: `${API_GATEWAY_URL}/api/learning/chat`,
     autoPrompt: `${API_GATEWAY_URL}/api/learning/chat/auto-prompt`,
     ai: `${API_GATEWAY_URL}/api/learning/chat/ai`, // New AI chat endpoint
+    aiStream: `${API_GATEWAY_URL}/api/learning/chat/ai-stream`, // Streaming AI chat endpoint
     session: `${API_GATEWAY_URL}/api/learning/chat/session`,
     sessions: `${API_GATEWAY_URL}/api/learning/chat/sessions`,
 

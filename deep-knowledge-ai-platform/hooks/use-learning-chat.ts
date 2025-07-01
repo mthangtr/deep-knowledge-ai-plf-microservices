@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { learningService } from "@/lib/services/learning";
 import { LearningChat } from "@/types/database";
 import { useAIChat } from "./use-ai-chat";
+import { useAIChatStream } from "./use-ai-chat-stream";
 
 interface UseLearningChatState {
   messages: LearningChat[];
@@ -26,6 +27,7 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
 
   // Integrate with new AI chat system
   const aiChat = useAIChat();
+  const aiChatStream = useAIChatStream();
 
   // Determine chat mode and memoize it to prevent unnecessary re-renders
   const chatMode = useMemo(
@@ -73,6 +75,7 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
 
         // Deduplicate messages from database (just in case)
         const messages = response.data || [];
+
         const uniqueMessages = messages.filter(
           (msg, index, self) => index === self.findIndex((m) => m.id === msg.id)
         );
@@ -206,6 +209,132 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
       }
     },
     [topicId, nodeId, aiChat.sendMessage]
+  );
+
+  // Send message using streaming AI chat system
+  const sendMessageStream = useCallback(
+    async (params: { message: string }) => {
+      if (!topicId || !params.message.trim()) return;
+
+      // Create optimistic user message immediately
+      const optimisticUserMessage: LearningChat = {
+        id: `temp-user-${Date.now()}`, // Temporary ID
+        topic_id: topicId,
+        node_id: nodeId,
+        user_id: "current", // Will be replaced by real user_id from backend
+        message: params.message.trim(),
+        is_ai_response: false,
+        message_type: "normal",
+        created_at: new Date().toISOString(),
+      };
+
+      // Add only user message to state initially
+      setState((prev) => ({
+        ...prev,
+        messages: [...prev.messages, optimisticUserMessage],
+        sending: true,
+        error: null,
+      }));
+
+      let aiMessageCreated = false;
+      let currentAiMessageId = `temp-ai-${Date.now()}`;
+
+      try {
+        const result = await aiChatStream.sendMessageStream(
+          params.message,
+          topicId,
+          nodeId,
+          undefined, // session_id
+          {
+            onUserMessage: (realUserMessage) => {
+              // Replace optimistic user message with real one
+              setState((prev) => ({
+                ...prev,
+                messages: prev.messages.map((msg) =>
+                  msg.id === optimisticUserMessage.id ? realUserMessage : msg
+                ),
+              }));
+            },
+            onChunk: (content, fullContent) => {
+              setState((prev) => {
+                // Create AI message on first chunk if not created yet
+                if (!aiMessageCreated) {
+                  aiMessageCreated = true;
+                  const newAiMessage: LearningChat = {
+                    id: currentAiMessageId,
+                    topic_id: topicId,
+                    node_id: nodeId,
+                    user_id: "current",
+                    message: fullContent,
+                    is_ai_response: true,
+                    message_type: "normal",
+                    created_at: new Date().toISOString(),
+                    isStreaming: true,
+                  };
+                  return {
+                    ...prev,
+                    messages: [...prev.messages, newAiMessage],
+                    sending: false, // Stop showing typing indicator
+                  };
+                } else {
+                  // Update existing AI message
+                  return {
+                    ...prev,
+                    messages: prev.messages.map((msg) =>
+                      msg.id === currentAiMessageId
+                        ? { ...msg, message: fullContent }
+                        : msg
+                    ),
+                  };
+                }
+              });
+            },
+            onComplete: (data) => {
+              // Replace temp AI message with real one from backend
+              setState((prev) => ({
+                ...prev,
+                messages: prev.messages.map((msg) =>
+                  msg.id === currentAiMessageId
+                    ? { ...data.ai_message, isStreaming: false }
+                    : msg
+                ),
+                sending: false,
+                error: null,
+              }));
+            },
+            onError: (error, details) => {
+              // Remove optimistic messages on error
+              setState((prev) => ({
+                ...prev,
+                messages: prev.messages.filter(
+                  (msg) =>
+                    msg.id !== optimisticUserMessage.id &&
+                    msg.id !== currentAiMessageId
+                ),
+                sending: false,
+                error: `Lỗi streaming: ${error}`,
+              }));
+            },
+          }
+        );
+
+        return result;
+      } catch (error) {
+        // Remove optimistic messages on error
+        setState((prev) => ({
+          ...prev,
+          messages: prev.messages.filter(
+            (msg) =>
+              msg.id !== optimisticUserMessage.id &&
+              msg.id !== currentAiMessageId
+          ),
+          sending: false,
+          error: "Lỗi kết nối khi gửi tin nhắn",
+        }));
+        return { error: "Lỗi kết nối" };
+      }
+    },
+    [topicId, nodeId, aiChatStream]
   );
 
   // Create auto AI prompt for topic (when first opened)
@@ -412,6 +541,7 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
 
     // Actions
     sendMessage,
+    sendMessageStream,
     createTopicAutoPrompt,
     createNodeAutoPrompt,
     clearMessages,
