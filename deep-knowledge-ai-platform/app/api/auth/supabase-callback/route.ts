@@ -194,7 +194,7 @@ export async function GET(request: NextRequest) {
     try {
       // Gọi backend để tạo JWT token
       const backendUrl = `${
-        process.env.NEXT_PUBLIC_API_GATEWAY_URL || "http://localhost:8080"
+        process.env.INTERNAL_API_GATEWAY_URL || "http://api-gateway:8080"
       }/api/auth/supabase-callback`;
 
       const backendResponse = await fetch(backendUrl, {

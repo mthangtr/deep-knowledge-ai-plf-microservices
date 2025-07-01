@@ -14,6 +14,8 @@ services:
       - api-gateway
     networks:
       - deep-knowledge-network
+    environment:
+      - INTERNAL_API_GATEWAY_URL=http://api-gateway:8080
 
   # Backend Main Service
   backend-main:
