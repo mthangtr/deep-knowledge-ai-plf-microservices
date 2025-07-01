@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase";
 
 export async function GET(request: NextRequest) {
-  // Debug: Log toàn bộ URL và params
-  console.log("🔍 [AUTH DEBUG] Full callback URL:", request.url);
 
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
@@ -14,13 +12,7 @@ export async function GET(request: NextRequest) {
   const access_token = searchParams.get("access_token");
   const refresh_token = searchParams.get("refresh_token");
 
-  console.log("🔍 [AUTH DEBUG] Params:", {
-    code: code ? "present" : "missing",
-    error,
-    error_description,
-    access_token: access_token ? "present" : "missing",
-    refresh_token: refresh_token ? "present" : "missing",
-  });
+
 
   // Xử lý lỗi từ Supabase
   if (error) {
@@ -53,10 +45,8 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient();
     let supabaseUser;
 
-    console.log("🔄 [AUTH STEP] Processing authentication...");
 
     if (code) {
-      console.log("🔄 [AUTH STEP] Using code flow...");
       // Flow cũ: đổi code thành session
       const { data: authData, error: authError } =
         await supabase.auth.exchangeCodeForSession(code);
@@ -73,7 +63,6 @@ export async function GET(request: NextRequest) {
 
       supabaseUser = authData.user;
     } else if (access_token && refresh_token) {
-      console.log("🔄 [AUTH STEP] Using token flow...");
       // Flow mới: set session từ tokens
       const { data: authData, error: authError } =
         await supabase.auth.setSession({
@@ -101,13 +90,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log("✅ [AUTH SUCCESS] Got Supabase user:", {
-      id: supabaseUser.id,
-      email: supabaseUser.email,
-    });
 
     // Kiểm tra xem user profile đã tồn tại chưa
-    console.log("🔄 [DB STEP] Checking user profile...");
     const { data: existingProfile, error: fetchError } = await supabase
       .from("user_profiles")
       .select("*")
@@ -125,7 +109,6 @@ export async function GET(request: NextRequest) {
     }
 
     if (existingProfile) {
-      console.log("🔄 [DB STEP] Updating existing profile...");
       // Profile đã tồn tại, cập nhật thông tin
       const { data: updatedProfile, error: updateError } = await supabase
         .from("user_profiles")
@@ -161,7 +144,6 @@ export async function GET(request: NextRequest) {
 
       userProfile = updatedProfile;
     } else {
-      console.log("🔄 [DB STEP] Creating new profile...");
       // Profile chưa tồn tại, tạo mới
       const provider = supabaseUser.app_metadata?.provider || "magic_link";
 
@@ -198,12 +180,6 @@ export async function GET(request: NextRequest) {
       userProfile = newProfile;
     }
 
-    console.log("✅ [DB SUCCESS] User profile ready:", {
-      id: userProfile.id,
-      email: userProfile.email,
-      name: userProfile.name,
-    });
-
     // Tạo user data để gửi đến backend
     const userData = {
       id: userProfile.id,
@@ -216,7 +192,6 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    console.log("🔄 [BACKEND STEP] Calling backend for JWT...");
 
     try {
       // Gọi backend để tạo JWT token
@@ -224,7 +199,6 @@ export async function GET(request: NextRequest) {
         process.env.NEXT_PUBLIC_API_GATEWAY_URL || "http://localhost:8080"
       }/api/auth/supabase-callback`;
 
-      console.log("🔄 [BACKEND STEP] Calling:", backendUrl);
 
       const backendResponse = await fetch(backendUrl, {
         method: "POST",
@@ -232,7 +206,7 @@ export async function GET(request: NextRequest) {
         body: JSON.stringify({ user: userData }),
       });
 
-      console.log("🔍 [BACKEND RESPONSE] Status:", backendResponse.status);
+
 
       if (!backendResponse.ok) {
         const errorData = await backendResponse.text();
@@ -246,10 +220,7 @@ export async function GET(request: NextRequest) {
       }
 
       const responseData = await backendResponse.json();
-      console.log("✅ [BACKEND SUCCESS] Got response:", {
-        hasToken: !!responseData.token,
-        hasUser: !!responseData.user,
-      });
+
 
       const { token, user } = responseData;
 
@@ -265,7 +236,7 @@ export async function GET(request: NextRequest) {
       successUrl.searchParams.set("user", JSON.stringify(user));
       successUrl.searchParams.set("token", token);
 
-      console.log("🎉 [SUCCESS] Redirecting to:", successUrl.toString());
+
 
       return NextResponse.redirect(successUrl);
     } catch (backendError) {

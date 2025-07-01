@@ -29,7 +29,6 @@ const FormPreviewPlaceholder: React.FC = () => {
 
 export const ExamplePreviewSection: React.FC<ExamplePreviewSectionProps> = ({ className = "" }) => {
     const handleGenerateClick: ClickHandler = () => {
-        console.log('Generate your form clicked');
         // Logic để xử lý khi click generate
     };
 

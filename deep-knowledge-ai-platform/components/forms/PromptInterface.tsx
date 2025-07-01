@@ -11,12 +11,10 @@ interface PromptInterfaceProps extends BaseComponentProps { }
 export const PromptInterface: React.FC<PromptInterfaceProps> = ({ className = "" }) => {
     const handleAttachClick: ClickHandler = () => {
         // Logic để attach file
-        console.log('Attach file clicked');
     };
 
     const handleSendClick: ClickHandler = () => {
         // Logic để gửi prompt
-        console.log('Send prompt clicked');
     };
 
     return (

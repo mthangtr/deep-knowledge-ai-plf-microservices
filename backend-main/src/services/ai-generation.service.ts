@@ -27,8 +27,6 @@ class AIGenerationService {
     message?: string;
   }> {
     try {
-      console.log("Calling FlowiseAI with prompt:", prompt);
-
       const response = await axios.post(
         this.flowiseUrl,
         {
@@ -47,8 +45,6 @@ class AIGenerationService {
       );
 
       const flowiseData = response.data as FlowiseResponse;
-      console.log("FlowiseAI response received");
-
       // Parse response
       let treeData: TreeData;
 

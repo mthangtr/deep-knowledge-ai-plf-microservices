@@ -91,16 +91,8 @@ export function useLearningGeneration() {
           error: null,
         }));
 
-        console.log("Bắt đầu generate learning tree:", { prompt, useAI });
-
         // Lấy auth headers
         const headers = await getHeaders();
-        console.log("🔍 [Generate Hook] Auth headers:", {
-          hasAuthHeader: !!headers.Authorization,
-          authHeaderStart: headers.Authorization
-            ? headers.Authorization.substring(0, 30) + "..."
-            : null,
-        });
 
         // Gọi API generate thật qua API Gateway
         const response = await fetch(API_ENDPOINTS.generate.tree, {
@@ -114,11 +106,6 @@ export function useLearningGeneration() {
 
         if (!response.ok) {
           const errorData = await response.json();
-          console.error("API Error Response:", {
-            status: response.status,
-            statusText: response.statusText,
-            errorData,
-          });
 
           // Hiển thị error chi tiết hơn
           const errorMessage =
@@ -157,7 +144,6 @@ export function useLearningGeneration() {
           generatedTree: apiResult.treeData,
         }));
 
-        console.log("Generate thành công:", apiResult);
         return {
           success: true,
           message: apiResult.message,

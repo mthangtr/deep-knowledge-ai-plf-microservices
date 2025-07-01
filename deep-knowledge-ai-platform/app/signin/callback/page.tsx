@@ -14,14 +14,8 @@ export default function SigninCallbackPage() {
     useEffect(() => {
         const handleCallback = async () => {
             try {
-                console.log("🔍 [CALLBACK DEBUG] Starting callback processing...");
-
-                // Log current auth state
-                logAuthState();
-
                 // Check for fragment-based tokens (Supabase modern auth)
                 const hash = window.location.hash;
-                console.log("🔍 [CALLBACK DEBUG] Fragment hash:", hash);
 
                 if (hash && hash.startsWith('#')) {
                     // Parse fragment parameters
@@ -30,21 +24,11 @@ export default function SigninCallbackPage() {
                     const refresh_token = fragmentParams.get("refresh_token");
                     const token_type = fragmentParams.get("token_type");
 
-                    console.log("🔍 [CALLBACK DEBUG] Fragment tokens:", {
-                        hasAccessToken: !!access_token,
-                        hasRefreshToken: !!refresh_token,
-                        tokenType: token_type
-                    });
-
                     if (access_token && refresh_token) {
-                        console.log("🔄 [CALLBACK STEP] Processing fragment-based auth...");
-
                         // Call our supabase callback API with tokens in query params
                         const callbackUrl = new URL("/api/auth/supabase-callback", window.location.origin);
                         callbackUrl.searchParams.set("access_token", access_token);
                         callbackUrl.searchParams.set("refresh_token", refresh_token);
-
-                        console.log("🔄 [CALLBACK STEP] Redirecting to:", callbackUrl.toString());
 
                         // Redirect to server-side callback với tokens
                         window.location.href = callbackUrl.toString();
@@ -56,11 +40,6 @@ export default function SigninCallbackPage() {
                 const userParam = searchParams.get("user");
                 const token = searchParams.get("token");
 
-                console.log("🔍 [CALLBACK DEBUG] URL params:", {
-                    hasUser: !!userParam,
-                    hasToken: !!token
-                });
-
                 if (!userParam || !token) {
                     console.error("❌ [CALLBACK ERROR] Missing user data or token in URL params");
                     setError("Missing user data or token - check authentication flow");
@@ -69,36 +48,21 @@ export default function SigninCallbackPage() {
                 }
 
                 const user = JSON.parse(userParam);
-                console.log("🔄 [CALLBACK STEP] Processing NextAuth signin...", {
-                    userId: user.id,
-                    email: user.email
-                });
 
                 // Clear any existing auth state first to prevent conflicts
-                console.log("🧹 [CALLBACK STEP] Clearing old auth state...");
                 clearAuthState();
 
                 // Use the JWT token directly from backend instead of storing in NextAuth
-                console.log("🔍 [CALLBACK] Using backend JWT token directly");
 
                 // Store JWT token in both sessionStorage and cookie for API calls and middleware
                 sessionStorage.setItem('jwt_token', token);
                 document.cookie = `jwt_token=${token}; Path=/; Max-Age=${30 * 24 * 60 * 60}; SameSite=Lax`;
-
-                console.log("✅ [CALLBACK] JWT token stored successfully");
 
                 // Sign in with NextAuth for session management (without backend JWT)
                 const result = await signIn("supabase-callback", {
                     user: JSON.stringify(user), // Don't include token
                     redirect: false,
                     callbackUrl: "/learning",
-                });
-
-                console.log("🔍 [NEXTAUTH RESULT]", {
-                    ok: result?.ok,
-                    error: result?.error,
-                    status: result?.status,
-                    url: result?.url
                 });
 
                 if (result?.error) {
@@ -115,12 +79,10 @@ export default function SigninCallbackPage() {
                     return;
                 }
 
-                console.log("✅ [CALLBACK SUCCESS] NextAuth signin successful");
                 setStatus("success");
 
                 // Use NextAuth result URL or fallback to /learning
                 const redirectUrl = result?.url || "/learning";
-                console.log("🔄 [REDIRECT] Redirecting to:", redirectUrl);
 
                 // Wait longer to ensure session is properly set
                 setTimeout(async () => {
@@ -128,11 +90,7 @@ export default function SigninCallbackPage() {
                     try {
                         const sessionResponse = await fetch('/api/auth/session');
                         const sessionData = await sessionResponse.json();
-                        console.log("🔍 [SESSION CHECK] Before redirect:", {
-                            hasUser: !!sessionData.user,
-                            hasAccessToken: !!sessionData.accessToken,
-                            userId: sessionData.user?.id
-                        });
+
                     } catch (error) {
                         console.warn("⚠️ [SESSION CHECK] Could not verify session:", error);
                     }

@@ -9,7 +9,6 @@ interface QuickSuggestionsProps extends BaseComponentProps { }
 
 export const QuickSuggestions: React.FC<QuickSuggestionsProps> = ({ className = "" }) => {
     const handleSuggestionClick: SuggestionClickHandler = (suggestion) => {
-        console.log('Suggestion clicked:', suggestion);
         // Logic để xử lý khi click vào suggestion
     };
 

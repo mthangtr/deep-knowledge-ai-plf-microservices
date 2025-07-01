@@ -45,7 +45,6 @@ export function TopicCreationInterface({ onNodeSelect, onTopicCreated, className
         if (!prompt.trim() || isLoading) return;
 
         try {
-            console.log('Bắt đầu tạo lộ trình học cho:', prompt);
 
             const generationResult = await generateLearningTree(prompt.trim(), true);
 
@@ -54,7 +53,6 @@ export function TopicCreationInterface({ onNodeSelect, onTopicCreated, className
                 setGeneratedTopicId(topicId);
 
                 // Load real tree từ database
-                console.log('Loading tree từ database cho topic:', topicId);
                 await fetchNodes(topicId);
 
                 // Refresh topics list
@@ -66,7 +64,6 @@ export function TopicCreationInterface({ onNodeSelect, onTopicCreated, className
                 }
 
                 setHasGenerated(true);
-                console.log('Đã tạo thành công topic:', topicId);
             }
         } catch (error) {
             console.error('Lỗi khi tạo lộ trình học:', error);
@@ -80,18 +77,18 @@ export function TopicCreationInterface({ onNodeSelect, onTopicCreated, className
                 id: node.id, // Dùng real UUID từ database
                 title: node.title,
                 description: node.description,
+                prompt_sample: node.prompt_sample,
+                is_chat_enabled: node.is_chat_enabled,
                 requires: node.requires || [],
                 next: node.next || [],
                 level: node.level || 0
             }));
 
             setTreeData(convertedTreeData);
-            console.log('Đã load tree từ database với', convertedTreeData.length, 'nodes');
         }
     }, [nodes]);
 
     const handleNodeClick = (node: MindMapNodeData) => {
-        console.log('Node được chọn:', node);
         onNodeSelect(node);
     };
 

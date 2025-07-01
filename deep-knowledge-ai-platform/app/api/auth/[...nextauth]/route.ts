@@ -15,7 +15,6 @@ export const authOptions: NextAuthOptions = {
         user: { type: "text" },
       },
       async authorize(credentials) {
-        console.log("🔍 [NextAuth Authorize] Starting authorization...");
 
         if (!credentials?.user) {
           console.error("❌ [NextAuth Authorize] No user credentials provided");
@@ -24,11 +23,7 @@ export const authOptions: NextAuthOptions = {
 
         try {
           const user = JSON.parse(credentials.user);
-          console.log("✅ [NextAuth Authorize] User authorized:", {
-            id: user.id,
-            email: user.email,
-            hasToken: false, // JWT handled separately
-          });
+
 
           return {
             id: user.id,
@@ -62,15 +57,7 @@ export const authOptions: NextAuthOptions = {
 
         // No longer storing JWT token in NextAuth session
         // JWT token is handled directly via sessionStorage
-        console.log(
-          "✅ [NextAuth JWT] Session created without storing backend JWT"
-        );
 
-        console.log("🔍 [NextAuth JWT] User signed in:", {
-          id: user.id,
-          email: user.email,
-          hasToken: false, // JWT handled separately
-        });
       }
       return token;
     },
@@ -83,20 +70,17 @@ export const authOptions: NextAuthOptions = {
           image: token.picture as string,
         };
         // No longer storing JWT token in session
-        console.log("🔍 [NextAuth Session] Session created:", {
-          userId: session.user.id,
-          hasToken: false, // JWT handled separately
-        });
+
       }
       return session;
     },
     async redirect({ url, baseUrl }) {
-      console.log("🔄 [NextAuth Redirect]", { url, baseUrl });
+
 
       // Nếu URL là relative, make it absolute
       if (url.startsWith("/")) {
         const fullUrl = new URL(url, baseUrl).toString();
-        console.log("🔄 [NextAuth Redirect] Converted to absolute:", fullUrl);
+
         return fullUrl;
       }
 
@@ -123,7 +107,7 @@ export const authOptions: NextAuthOptions = {
       console.warn("⚠️ [NextAuth Warning]", code);
     },
     debug(code, metadata) {
-      console.log("🔍 [NextAuth Debug]", code, metadata);
+
     },
   },
 };

@@ -221,23 +221,10 @@ async def smart_chat(request: SmartChatRequest):
                 "agent_info": {"type": "fallback", "error": str(ai_error)}
             }
         
-        # FIXED: Save user message SAU KHI đã generate AI response
-        await db_context_manager.add_message(
-            session_id=session_id,
-            user_id=request.user_id,
-            role="user",
-            content=request.message
-        )
-        
-        # Add AI response to context
-        await db_context_manager.add_message(
-            session_id=session_id,
-            user_id=request.user_id,
-            role="assistant", 
-            content=result["response"],
-            model_used=result["model_used"],
-            tokens_used=context_package.total_tokens_estimate
-        )
+        # REMOVED: Don't save messages to DB - Backend handles this
+        # Backend is responsible for saving both user and AI messages
+        # This service only processes and returns AI responses
+        logger.info(f"Skipping message save - Backend handles persistence")
         
         # Get session stats
         session_stats = await db_context_manager.get_session_stats(session_id)

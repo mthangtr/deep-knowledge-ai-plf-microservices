@@ -1,14 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { learningService } from "@/lib/services/learning";
 import { LearningChat } from "@/types/database";
 import { useAIChat } from "./use-ai-chat";
-
-// Debug utility for tracking message operations
-const debugLog = (operation: string, data: any) => {
-  if (process.env.NODE_ENV === "development") {
-    console.log(`🔍 [use-learning-chat] ${operation}:`, data);
-  }
-};
 
 interface UseLearningChatState {
   messages: LearningChat[];
@@ -90,14 +83,6 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
             new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         );
 
-        debugLog("Fetch messages completed", {
-          topicId,
-          nodeId,
-          originalCount: messages.length,
-          uniqueCount: uniqueMessages.length,
-          duplicatesFound: messages.length - uniqueMessages.length,
-        });
-
         setState((prev) => ({
           ...prev,
           messages: uniqueMessages,
@@ -119,13 +104,6 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
   // Send message using new AI chat system
   const sendMessage = useCallback(
     async (params: { message: string }) => {
-      debugLog("sendMessage triggered", {
-        topicId,
-        nodeId,
-        message: params.message,
-        timestamp: new Date().toISOString(),
-      });
-
       if (!topicId || !params.message.trim()) return;
 
       // Create optimistic user message immediately
@@ -176,15 +154,6 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
               (msg) => msg.id === ai_message.id
             );
 
-            debugLog("Processing API response", {
-              optimisticId: optimisticUserMessage.id,
-              userMessageId: user_message.id,
-              aiMessageId: ai_message.id,
-              userExists,
-              aiExists,
-              messagesBeforeOptimistic: withoutOptimistic.length,
-            });
-
             const newMessages = [...withoutOptimistic];
 
             // Only add messages if they don't exist
@@ -201,12 +170,6 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
                 new Date(a.created_at).getTime() -
                 new Date(b.created_at).getTime()
             );
-
-            debugLog("State update completed", {
-              finalMessageCount: newMessages.length,
-              addedUser: !userExists,
-              addedAI: !aiExists,
-            });
 
             return {
               ...prev,
@@ -341,11 +304,6 @@ export function useLearningChat(topicId?: string, nodeId?: string) {
           messageToSend,
           nodeData.topic_id,
           nodeData.node_id
-        );
-
-        console.log(
-          ">>> [use-learning-chat] createNodeAutoPrompt response",
-          response
         );
 
         if (response.success && response.data) {

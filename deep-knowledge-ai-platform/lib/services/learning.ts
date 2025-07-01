@@ -27,7 +27,6 @@ type AutoPromptResponse = {
 
 class LearningService {
   private async getHeaders() {
-    console.log("🔍 [Learning Service] Getting headers...");
 
     // Get JWT token from sessionStorage, fallback to cookie
     let token = sessionStorage.getItem("jwt_token");
@@ -41,19 +40,8 @@ class LearningService {
       token = jwtCookie ? jwtCookie.split("=")[1] : null;
     }
 
-    console.log("🔍 [Learning Service] JWT Token from sessionStorage:", {
-      hasToken: !!token,
-      tokenLength: token?.length,
-      tokenStart: token ? token.substring(0, 20) + "..." : null,
-    });
 
     const headers = getAuthHeaders(token || undefined);
-    console.log("🔍 [Learning Service] Headers:", {
-      hasAuthHeader: !!headers.Authorization,
-      authHeaderStart: headers.Authorization
-        ? headers.Authorization.substring(0, 30) + "..."
-        : null,
-    });
 
     return headers;
   }
@@ -61,28 +49,17 @@ class LearningService {
   // Topics API
   async getTopics(): Promise<ApiResponse<LearningTopic[]>> {
     try {
-      console.log("🔍 [SERVICE] Calling getTopics...");
       const headers = await this.getHeaders();
-      console.log("🔍 [SERVICE] Request URL:", API_ENDPOINTS.learning.topics);
-      console.log("🔍 [SERVICE] Request headers:", headers);
 
       const response = await fetch(API_ENDPOINTS.learning.topics, {
         headers,
       });
 
-      console.log("🔍 [SERVICE] HTTP Response:", {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-        headers: Object.fromEntries(response.headers.entries()),
-      });
 
       const jsonResponse = await response.json();
-      console.log("🔍 [SERVICE] JSON Response:", jsonResponse);
 
       return jsonResponse;
     } catch (error) {
-      console.error("❌ [SERVICE] Network error in getTopics:", error);
       return { error: "Lỗi kết nối mạng" };
     }
   }

@@ -19,9 +19,9 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <Providers>
           {children}
-          <div className="fixed inset-0 z-0">
+          {/* <div className="fixed inset-0 z-0">
             <AnimatedBackground />
-          </div>
+          </div> */}
         </Providers>
       </body>
     </html>

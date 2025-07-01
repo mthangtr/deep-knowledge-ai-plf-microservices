@@ -22,16 +22,9 @@ export function useLearningTopics() {
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
-      console.log("🔍 [TOPICS HOOK] Starting fetchTopics...");
       const response = await learningService.getTopics();
 
-      console.log("🔍 [TOPICS HOOK] Response:", {
-        hasError: !!response.error,
-        error: response.error,
-        hasData: !!response.data,
-        dataLength: response.data?.length,
-        fullResponse: response,
-      });
+
 
       if (response.error) {
         console.error("❌ [TOPICS HOOK] Error from service:", response.error);
@@ -43,7 +36,7 @@ export function useLearningTopics() {
         return;
       }
 
-      console.log("✅ [TOPICS HOOK] Setting topics data:", response.data);
+
       setState((prev) => ({
         ...prev,
         topics: response.data || [],

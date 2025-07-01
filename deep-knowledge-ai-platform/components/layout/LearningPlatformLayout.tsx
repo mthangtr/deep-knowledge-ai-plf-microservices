@@ -90,16 +90,6 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
         selectedNodeForChat?.id
     );
 
-    // Debug: Log topics data
-    useEffect(() => {
-        console.log('🔍 [TOPICS DEBUG] Topics state:', {
-            topicsCount: topics.length,
-            topics: topics.map(t => ({ id: t.id, title: t.title })),
-            loading: topicsLoading,
-            error: topicsError
-        });
-    }, [topics, topicsLoading, topicsError]);
-
     // Convert database topics to UI format for sidebar
     const formattedTopics = topics.map(topic => ({
         id: topic.id,
@@ -110,22 +100,14 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
         messageCount: topic.completed_nodes || 0
     }));
 
-    // Debug: Log formatted topics
-    useEffect(() => {
-        console.log('🔍 [UI DEBUG] Formatted topics:', {
-            formattedTopicsCount: formattedTopics.length,
-            formattedTopics: formattedTopics.map(t => ({ id: t.id, title: t.title }))
-        });
-    }, [formattedTopics]);
+
 
     // Expose debug utilities to window for easy access
     useEffect(() => {
         if (typeof window !== 'undefined') {
             (window as any).debugAuth = {
                 logAuthState,
-                clearAuthState,
-                logTopics: () => console.log('Topics:', topics),
-                logFormattedTopics: () => console.log('Formatted Topics:', formattedTopics)
+                clearAuthState, 
             };
         }
     }, [topics, formattedTopics]);
@@ -170,13 +152,6 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
             selectTopic(dbTopic);
             setSelectedNodeForChat(null); // Reset to topic-level chat
             setShowCreationInterface(false);
-
-            // Không auto-send message, user tự quyết định khi nào muốn chat
-            console.log('Topic selected:', {
-                topicId: dbTopic.id,
-                topicTitle: dbTopic.title,
-                hasExistingMessages: messages.length > 0
-            });
         }
     };
 
@@ -193,10 +168,6 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
         setSelectedNodeForChat(null);
 
         // Topic mới được tạo, chờ user tự bắt đầu chat
-        console.log('New topic created and selected:', {
-            topicId: newTopic.id,
-            topicTitle: newTopic.title
-        });
     };
 
     const handleTopicCreatedFromInterface = async (topicId: string) => {
@@ -215,12 +186,7 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
 
             // Chỉ chuyển đến node chat mode mà không auto-send message
             // User có thể tự gửi message nếu muốn
-            console.log('Switched to node chat mode:', {
-                nodeId: node.id,
-                nodeTitle: node.title,
-                isChatEnabled: dbNode.is_chat_enabled,
-                promptSample: dbNode.prompt_sample
-            });
+
         }
     };
 
