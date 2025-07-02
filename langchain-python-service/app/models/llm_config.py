@@ -117,9 +117,7 @@ class LLMConfig:
         else:
             use_streaming = force_streaming
         
-        model_kwargs = {
-            "max_tokens": max_tokens,
-        }
+        model_kwargs = {}
         
         # Add provider-specific parameters
         provider_params = kwargs.get("provider_params", {})

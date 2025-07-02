@@ -10,7 +10,6 @@ import noteRoutes from "./routes/note.routes";
 import chatRoutes from "./routes/chat.routes";
 import treeRoutes from "./routes/tree.routes";
 import generateRoutes from "./routes/generate.routes";
-import debugRoutes from "./routes/debug.routes";
 
 // Import middleware
 import { errorHandler } from "./middleware/error.middleware";
@@ -50,12 +49,10 @@ app.use("/api/learning/chat", chatRoutes);
 app.use("/api/learning/tree", treeRoutes);
 app.use("/api/learning/generate", generateRoutes);
 app.use("/api/learning", topicRoutes); // General topics route last
-app.use("/api/debug", debugRoutes);
 
 // Error handling
 app.use(errorHandler);
 
 app.listen(PORT, () => {
-  console.log(`🚀 Backend Main Service running on port ${PORT}`);
-  console.log(`📡 Environment: ${process.env.NODE_ENV || "development"}`);
+  console.log(`Server is running on port ${PORT}`);
 });

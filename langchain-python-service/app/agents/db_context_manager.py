@@ -40,9 +40,14 @@ class DatabaseContextManager:
             if database_url.startswith("postgres://"):
                 database_url = database_url.replace("postgres://", "postgresql://", 1)
             
-            self.db_pool = await asyncpg.create_pool(database_url, min_size=5, max_size=20)
+            self.db_pool = await asyncpg.create_pool(
+                database_url, 
+                min_size=5, 
+                max_size=20,
+                statement_cache_size=0
+            )
             await self.performance_monitor.start_monitoring()
-            logger.info("PostgreSQL connection pool created and monitoring started.")
+            logger.info("PostgreSQL connection pool created (statement_cache_size=0) and monitoring started.")
         except Exception as e:
             logger.error(f"Failed to create DB pool: {e}")
             raise
@@ -102,13 +107,29 @@ class DatabaseContextManager:
                 ]
                 recent_messages_db, summary, structural_context_data, session_data = await asyncio.gather(*tasks)
 
+            logger.debug(f"Context loaded - topic: {structural_context_data.get('topic_title')}, node: {structural_context_data.get('node_title')}")
+
+            # Safe handling of user_knowledge_state
+            user_knowledge_state = {}
+            if session_data and session_data['user_knowledge_state']:
+                try:
+                    if isinstance(session_data['user_knowledge_state'], dict):
+                        user_knowledge_state = session_data['user_knowledge_state']
+                    elif isinstance(session_data['user_knowledge_state'], str):
+                        user_knowledge_state = json.loads(session_data['user_knowledge_state'])
+                    else:
+                        logger.warning(f"Unexpected user_knowledge_state type: {type(session_data['user_knowledge_state'])}")
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"Failed to parse user_knowledge_state: {e}")
+                    user_knowledge_state = {}
+
             context_package = ContextPackage(
                 recent=self._convert_to_messages(recent_messages_db),
                 summary=summary,
                 structural_context=structural_context_data.get("text"),
                 topic_title=structural_context_data.get("topic_title"),
                 node_title=structural_context_data.get("node_title"),
-                user_knowledge_state=dict(session_data['user_knowledge_state']) if session_data else {},
+                user_knowledge_state=user_knowledge_state,
                 context_type=ContextNeedType.FULL_CONTEXT
             )
             context_package.total_tokens_estimate = self._estimate_tokens(context_package)
@@ -120,18 +141,19 @@ class DatabaseContextManager:
             logger.error(f"Error getting context: {e}")
             return self._build_minimal_context_with_metrics(context_start_time, is_error=True)
 
-    async def add_message(self, session_id: str, user_id: str, role: str, content: str, model_used: Optional[str] = None, tokens_used: int = 0, knowledge_state_to_update: Optional[Dict[str, Any]] = None) -> str:
+    async def add_message(self, session_id: str, user_id: str, topic_id: str, node_id: Optional[str], role: str, content: str, model_used: Optional[str] = None, tokens_used: int = 0, knowledge_state_to_update: Optional[Dict[str, Any]] = None) -> str:
         if not self.db_pool: raise RuntimeError("DB pool not initialized.")
         try:
             async with self.db_pool.acquire() as conn:
                 async with conn.transaction():
-                    # Simplified INSERT RETURNING id
+                    # Step 1: Insert the new message
                     message_id = await conn.fetchval("""
-                        INSERT INTO learning_chats (session_id, user_id, message, is_ai_response, model_used, tokens_used, context_type)
-                        SELECT $1, $2, $3, $4, $5, $6, 'recent'
+                        INSERT INTO learning_chats (session_id, user_id, topic_id, node_id, message, is_ai_response, model_used, tokens_used, context_type)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'recent')
                         RETURNING id
-                    """, session_id, user_id, content, role == "assistant", model_used, tokens_used)
+                    """, session_id, user_id, topic_id, node_id, content, role == "assistant", model_used, tokens_used)
                     
+                    # Step 2: Update the parent session's metadata
                     if knowledge_state_to_update:
                         current_state_raw = await conn.fetchval("SELECT user_knowledge_state FROM chat_sessions WHERE id = $1 FOR UPDATE", session_id)
                         current_state = dict(current_state_raw or {})

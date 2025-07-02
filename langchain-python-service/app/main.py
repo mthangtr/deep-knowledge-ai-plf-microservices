@@ -21,6 +21,7 @@ from app.services.model_router_service import model_router
 from app.services.cache_manager import cache_manager
 from app.prompts.domain_instructions import DOMAIN_INSTRUCTIONS_MAP
 from app.config.model_router_config import Domain
+from app.routes import learning_path_routes
 
 load_dotenv()
 
@@ -56,6 +57,9 @@ app.add_middleware(
 # Initialize orchestrator and database context manager
 orchestrator = MultiAgentOrchestrator()
 db_context_manager = DatabaseContextManager()
+
+# Include routers
+app.include_router(learning_path_routes.router)
 
 # Pydantic models
 class ChatMessage(BaseModel):
@@ -198,6 +202,17 @@ async def smart_chat(request: SmartChatRequest):
                 title=f"Chat - {request.message[:50]}..."
             )
             
+            # SAVE USER MESSAGE (only if in a topic)
+            if request.topic_id:
+                await db_context_manager.add_message(
+                    session_id=session_id,
+                    user_id=request.user_id,
+                    topic_id=request.topic_id,
+                    node_id=request.node_id,
+                    role="user",
+                    content=request.message
+                )
+
             if not request.session_id:
                 logger.info(f"Created new session: {session_id}")
             elif request.session_id != session_id:
@@ -261,16 +276,19 @@ async def smart_chat(request: SmartChatRequest):
             direct_request_keywords = [
                 "tôi không biết", "chưa bao giờ nghe", "muốn đi thẳng vào vấn đề",
                 "giải thích trực tiếp", "đừng hỏi nữa", "cứ trả lời đi", "tôi không hiểu gì",
-                "hãy nói về", "cho tôi biết về"
+                "hãy nói về", "cho tôi biết về", "cần vào thẳng vấn đề", "vào thẳng vấn đề",
+                "người mới", "mới bắt đầu", "nói thẳng", "thẳng vấn đề"
             ]
 
             selected_persona = None
             persona_name = ""
 
             # 1. Prioritize direct requests to override default Socratic method
-            if any(keyword in user_message_lower for keyword in direct_request_keywords):
+            matched_keywords = [kw for kw in direct_request_keywords if kw in user_message_lower]
+            if matched_keywords:
                 selected_persona = DIRECT_INSTRUCTOR
                 persona_name = "Direct Instructor"
+                logger.debug(f"PERSONA DEBUG - triggered DIRECT_INSTRUCTOR by keywords: {matched_keywords}")
             
             # 2. If not a direct request, check for other persona triggers
             if not selected_persona:
@@ -377,6 +395,19 @@ async def smart_chat(request: SmartChatRequest):
                     }
                     yield f"data: {json.dumps(chunk_data)}\n\n"
             
+            # SAVE AI RESPONSE (only if in a topic)
+            if full_response and request.topic_id:
+                await db_context_manager.add_message(
+                    session_id=session_id,
+                    user_id=request.user_id,
+                    topic_id=request.topic_id,
+                    node_id=request.node_id,
+                    role="assistant",
+                    content=full_response,
+                    model_used=selected_model,
+                    # We don't have token count from streaming API, so we use the default of 0
+                )
+
             # Get session stats
             session_stats = await db_context_manager.get_session_stats(session_id)
             

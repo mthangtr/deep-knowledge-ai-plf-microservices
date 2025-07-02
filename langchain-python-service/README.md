@@ -16,6 +16,19 @@ Multi-agent LLM service với **Hệ thống lý luận đa tầng (Multi-Layere
 - ✅ FastAPI với auto docs
 - ✅ Docker support
 
+### 🆕 Phase 6: Generator-Critique Architecture for Outlines
+
+- ✅ **Chuỗi Agent "Tạo sinh - Phản biện"**: Một Agent chuyên tạo bản nháp chi tiết và một Agent khác chuyên review, sửa lỗi và hoàn thiện, mô phỏng quy trình làm việc của chuyên gia.
+- ✅ **Phân tích Chuyên ngành & Phương pháp luận**: Tự động áp dụng các phương pháp học tập riêng cho từng lĩnh vực (Lập trình, Ngoại ngữ, Khoa học...) để tạo outline có chiều sâu.
+- ✅ **Đánh giá Trình độ Người dùng**: Phân tích yêu cầu để xác định cấp độ (Beginner, Intermediate, Expert) và điều chỉnh nội dung cho phù hợp.
+- ✅ **"Prompt Động"**: Tự động "bơm" các chỉ dẫn về phương pháp luận và trình độ vào prompt để cá nhân hóa kết quả ở mức độ cao.
+
+### 🆕 Phase 5: Adaptive Learning & Personalization
+
+- ✅ **Adaptive Difficulty:** AI tự động điều chỉnh độ phức tạp của câu trả lời (Beginner, Intermediate, Expert) dựa trên trình độ đã được theo dõi của người dùng trong từng chủ đề.
+- ✅ **Knowledge Gap Analysis:** AI có khả năng phát hiện các "lỗ hổng kiến thức" tiềm ẩn (ví dụ: người dùng hỏi câu hỏi nâng cao về một chủ đề mà họ chưa nắm vững kiến thức cơ bản) và chủ động đề xuất các lộ trình học tập hiệu quả hơn.
+- ✅ **Personalized Learning State:** Hệ thống theo dõi và lưu trữ trạng thái học tập của người dùng trên từng topic, tạo ra một trải nghiệm học tập được cá nhân hóa sâu sắc qua các session.
+
 ### 🆕 Phase 4: Multi-Layered Reasoning & Communication
 
 - ✅ **Triết lý giao tiếp 2 cấp độ**: "Khung Giao tiếp" (luôn áp dụng) và "Phương pháp Chuyên môn" (linh hoạt) đảm bảo mọi câu trả lời đều chuyên nghiệp và đúng ngữ cảnh.
@@ -73,38 +86,67 @@ graph TD
     end
 ```
 
-## 🧠 Triết lý hệ thống: Lý luận đa tầng
+## 🧠 Triết lý hệ thống: Lý luận đa tầng & Phản biện
 
 Hệ thống không còn hoạt động như một chatbot hỏi-đáp đơn thuần. Thay vào đó, mỗi yêu cầu của người dùng sẽ đi qua một **hệ thống lý luận đa tầng** để đảm bảo câu trả lời cuối cùng là thông minh, phù hợp và hữu ích nhất.
 
-### Sơ đồ luồng lý luận (Reasoning Flow)
+### 1. Luồng xử lý Chat thông minh (Intelligent Routing Flow)
+
+Kiến trúc này được áp dụng cho các tác vụ chat tương tác, tối ưu hóa việc lựa chọn model, persona và ngữ cảnh để trả lời câu hỏi.
 
 ```mermaid
 graph TD
-    A[User Request<br/>(message, topic_id, node_id)] --> B{DB Context Manager};
-    B --> C[Context Package<br/>(history, summary, structural_context, user_knowledge_state)];
+    subgraph "1. Input Layer"
+        A[User Message + Session Info]
+    end
+
+    subgraph "2. Context & Routing Layer"
+        A --> B{Lightweight Router};
+        B -- Standalone? --> C[Skip Context];
+        B -- Needs Context --> D[DB Context Manager];
+        D --> E[ContextPackage];
+        E --> F[Persona Engine];
+        E --> G[Model Router];
+        F -- Persona --> H[Prompt Builder];
+        G -- Selected Model --> H;
+        E -- Context Info --> H;
+    end
 
     subgraph "Intelligence Layer (in main.py)"
         C & A --> D{Multi-Layered Analysis<br/>- Proficiency<br/>- Relevance<br/>- Persona<br/>- Style<br/>- Domain};
         D --> E[Instruction Set<br/>(All guidances & persona)];
         D --> F[Selected Model];
     end
-
-    subgraph "Final Assembly (Prompt)"
-        E & C --> G[MASTER_SYSTEM_PROMPT];
-    end
-
-    G & F --> H{Orchestrator};
-    H --> I[LLM];
-    I --> J[Streaming Response to User];
 ```
 
-### Triết lý giao tiếp 2 cấp độ
+### 2. Kiến trúc "Tạo sinh - Phản biện" cho việc tạo Lộ trình học
 
-Đây là cốt lõi của hệ thống, được định nghĩa trong `MASTER_SYSTEM_PROMPT`:
+Để tạo ra các lộ trình học chất lượng cao, hệ thống áp dụng một kiến trúc "Generator-Critique" mạnh mẽ, đây là một ví dụ điển hình của triết lý lý luận đa tầng.
 
-1.  **Khung Giao tiếp (Luôn áp dụng):** Đóng vai trò `STRATEGIC_ASSISTANT`, đảm bảo mọi câu trả lời đều có cấu trúc, mang tính cộng tác và dẫn dắt cuộc trò chuyện.
-2.  **Phương pháp Chuyên môn (Linh hoạt):** Dựa vào ngữ cảnh, AI sẽ áp dụng các phương pháp khác nhau như `PRAGMATIC_ENGINEER` (khi cần giải pháp kỹ thuật) hoặc `DIRECT_INSTRUCTOR` (khi người dùng cần câu trả lời thẳng).
+```mermaid
+graph TD
+    A[User Request] --> B{Agent A: Interpreter<br/>(Topic, Requirement, Proficiency)};
+
+    subgraph "Parallel Execution"
+        B -- Analysis --> C[Agent B: Drafter<br/>Tạo bản nháp outline hoàn chỉnh];
+        C -- Draft Outline --> D{Agent C: QA & Refiner<br/>Review, sửa lỗi, và hoàn thiện};
+
+        B -- Analysis --> E{Agent D: Metadata Gen<br/>(topicName, description)};
+    end
+
+    subgraph "Final Assembly"
+        D -- Final Outline Text --> F[Python Parser<br/>_parse_outline_to_tree];
+        F & E --> G[Combine tree + metadata];
+        G --> H[Final JSON Response];
+    end
+```
+
+#### Tại sao Kiến trúc này vượt trội?
+
+1.  **Chuyên môn hóa (Specialization):** Mỗi agent chỉ tập trung vào một nhiệm vụ mà nó làm tốt nhất. Agent B (Drafter) giỏi về việc "brainstorm" một cách toàn diện. Agent C (Refiner) giỏi về việc "biên tập" và tìm lỗi.
+2.  **Chất lượng đảm bảo (Quality Assurance):** Bước phản biện của Agent C hoạt động như một lớp QA tự động, giúp phát hiện những thiếu sót, sự lặp lại hoặc các điểm chưa logic mà một agent duy nhất có thể bỏ qua.
+3.  **Hiệu năng (Performance):** Các tác vụ độc lập (tạo outline và tạo metadata) vẫn được thực thi song song, giúp tối ưu thời gian phản hồi.
+4.  **Minh bạch & Dễ gỡ lỗi:** Việc tách các bước giúp chúng ta dễ dàng xem xét output của từng agent và xác định chính xác vấn đề nằm ở đâu trong chuỗi.
 
 ## 🧠 Adaptive Learning Engine
 

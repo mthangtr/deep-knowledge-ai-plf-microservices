@@ -227,6 +227,7 @@ export interface TreeViewProps {
 }
 
 export function TreeView({ nodes, className, onNodeClick }: TreeViewProps) {
+    console.log("--- TreeView Data Received ---", nodes);
     // Auto-expand top level nodes (level 0 and 1) by default
     const getDefaultExpandedNodes = () => {
         const topLevelNodes = nodes.filter(node => node.level <= 1);

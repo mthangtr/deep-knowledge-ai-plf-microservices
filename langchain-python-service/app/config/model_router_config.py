@@ -4,6 +4,9 @@ class Domain(Enum):
     """Defines the knowledge domains for model selection."""
     PROGRAMMING = "PROGRAMMING"
     SCIENCE = "SCIENCE"
+    LANGUAGE = "LANGUAGE"
+    FINANCE = "FINANCE"
+    CRYPTO = "CRYPTO" # New specific domain
     DEFAULT = "DEFAULT"
     # Future domains like LAW, MEDICINE, FINANCE can be added here.
 
@@ -21,6 +24,9 @@ class ModelTier(Enum):
 DOMAIN_KEYWORDS = {
     Domain.PROGRAMMING: ["code", "lập trình", "python", "javascript", "react", "node", "css", "html", "docker", "sql", "database", "api", "git", "thuật toán", "algorithm"],
     Domain.SCIENCE: ["toán", "vật lý", "hóa học", "sinh học", "y học", "khoa học", "định lý", "nguyên lý", "công thức", "phương trình"],
+    Domain.LANGUAGE: ["tiếng anh", "english", "tiếng nhật", "japanese", "ngoại ngữ", "ngữ pháp", "từ vựng", "grammar", "vocabulary", "ielts", "toeic"],
+    Domain.FINANCE: ["chứng khoán", "cổ phiếu", "stock", "kinh tế", "economics", "ngân hàng", "banking"],
+    Domain.CRYPTO: ["crypto", "tiền điện tử", "bitcoin", "ethereum", "blockchain", "web3", "nft", "token", "coin"],
 }
 
 # Keywords to determine the complexity level from the user's message
@@ -55,7 +61,22 @@ MODEL_STRATEGY = {
     Domain.SCIENCE: {
         ModelTier.LEVEL_1: "google/gemini-2.0-flash-lite-001",
         ModelTier.LEVEL_2: "google/gemini-2.5-flash",
-        ModelTier.LEVEL_3: "google/gemini-2.5-pro"
+        ModelTier.LEVEL_3: "deepseek/deepseek-r1-0528:free"
+    },
+    Domain.LANGUAGE: {
+        ModelTier.LEVEL_1: "google/gemini-2.0-flash-lite-001",
+        ModelTier.LEVEL_2: "google/gemini-2.5-flash",
+        ModelTier.LEVEL_3: "deepseek/deepseek-r1-0528:free"
+    },
+    Domain.FINANCE: {
+        ModelTier.LEVEL_1: "google/gemini-2.0-flash-lite-001",
+        ModelTier.LEVEL_2: "google/gemini-2.5-flash",
+        ModelTier.LEVEL_3: "deepseek/deepseek-r1-0528:free"
+    },
+    Domain.CRYPTO: {
+        ModelTier.LEVEL_1: "google/gemini-2.5-flash",
+        ModelTier.LEVEL_2: "google/gemini-2.5-flash",
+        ModelTier.LEVEL_3: "deepseek/deepseek-r1-0528:free"
     },
     Domain.DEFAULT: {
         ModelTier.LEVEL_1: "google/gemini-2.0-flash-lite-001",

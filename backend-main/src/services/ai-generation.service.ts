@@ -1,23 +1,12 @@
 import axios from "axios";
 import { TreeData } from "../types";
 
-interface FlowiseResponse {
-  text?: string;
-  tree?: any;
-  [key: string]: any;
-}
-
 class AIGenerationService {
-  private flowiseUrl: string;
-  private flowiseApiKey: string;
+  private langchainServiceUrl: string;
 
   constructor() {
-    this.flowiseUrl =
-      process.env.FLOWISE_API_URL ||
-      "https://cloud.flowiseai.com/api/v1/prediction/3e25445a-0652-45de-8ad6-8e1c78740a8c";
-    this.flowiseApiKey =
-      process.env.FLOWISE_API_KEY ||
-      "YQT-c-WYOGuUiRY7YqK5xAgoGvGnVlzKACW1dJEapS4";
+    this.langchainServiceUrl =
+      process.env.LANGCHAIN_SERVICE_URL || "http://localhost:5000";
   }
 
   async generateLearningTree(prompt: string): Promise<{
@@ -28,159 +17,63 @@ class AIGenerationService {
   }> {
     try {
       const response = await axios.post(
-        this.flowiseUrl,
+        `${this.langchainServiceUrl}/learning-path/generate`,
         {
-          question: prompt,
-          overrideConfig: {
-            returnSourceDocuments: false,
-          },
+          message: prompt,
         },
         {
           headers: {
-            Authorization: `Bearer ${this.flowiseApiKey}`,
             "Content-Type": "application/json",
           },
-          timeout: 60000, // 60 seconds timeout
+          timeout: 120000, // 120 seconds timeout for potentially long generation
         }
       );
 
-      const flowiseData = response.data as FlowiseResponse;
-      // Parse response
-      let treeData: TreeData;
+      const generatedData = response.data as TreeData;
 
-      if (flowiseData.text) {
-        // Try to extract JSON from text response
-        try {
-          const jsonMatch = flowiseData.text.match(
-            /```json\n?([\s\S]*?)\n?```/
-          );
-          if (jsonMatch) {
-            treeData = JSON.parse(jsonMatch[1]);
-          } else {
-            // Try direct parse
-            treeData = JSON.parse(flowiseData.text);
-          }
-        } catch (parseError) {
-          console.error("Failed to parse FlowiseAI response:", parseError);
-          return {
-            success: false,
-            error: "Failed to parse AI response",
-            message: "AI trả về dữ liệu không đúng định dạng",
-          };
-        }
-      } else if (flowiseData.tree) {
-        treeData = flowiseData as TreeData;
-      } else {
-        return {
-          success: false,
-          error: "Invalid response format",
-          message: "AI không trả về dữ liệu tree",
-        };
-      }
-
-      // Validate tree data
+      // Validate the response from the langchain service
       if (
-        !treeData.tree ||
-        !Array.isArray(treeData.tree) ||
-        treeData.tree.length === 0
+        !generatedData.topicName ||
+        !generatedData.description ||
+        !generatedData.tree ||
+        !Array.isArray(generatedData.tree)
       ) {
         return {
           success: false,
-          error: "Invalid tree structure",
-          message: "Dữ liệu tree không hợp lệ",
+          error: "Invalid AI response structure",
+          message:
+            "Dữ liệu trả về từ AI service không đúng định dạng mong muốn.",
         };
       }
 
       return {
         success: true,
-        data: treeData,
-        message: "Tạo learning tree thành công",
+        data: generatedData,
+        message: "Tạo learning tree thành công từ LangChain Service.",
       };
     } catch (error) {
-      console.error("FlowiseAI error:", error);
+      console.error("LangChain Service Error:", error);
 
+      let errorMessage = "Lỗi không xác định khi gọi AI service.";
       if (axios.isAxiosError(error)) {
         if (error.response) {
-          return {
-            success: false,
-            error: `FlowiseAI error: ${error.response.status}`,
-            message: error.response.data?.message || "Lỗi từ FlowiseAI",
-          };
+          // The request was made and the server responded with a status code
+          // that falls out of the range of 2xx
+          errorMessage =
+            error.response.data?.detail ||
+            `Lỗi từ LangChain Service: ${error.response.status}`;
         } else if (error.request) {
-          return {
-            success: false,
-            error: "No response from FlowiseAI",
-            message: "Không thể kết nối với FlowiseAI",
-          };
+          // The request was made but no response was received
+          errorMessage = "Không thể kết nối tới LangChain Service.";
         }
       }
 
       return {
         success: false,
-        error: "Unknown error",
-        message: "Lỗi không xác định khi gọi AI",
+        error: "LangChain Service Error",
+        message: errorMessage,
       };
     }
-  }
-
-  generateSampleTree(prompt: string): TreeData {
-    // Generate sample tree for testing
-    const baseNodes = [
-      {
-        temp_id: "node1",
-        title: "Giới thiệu về " + prompt,
-        description: "Tìm hiểu các khái niệm cơ bản và tổng quan",
-        prompt_sample: "Giải thích cho tôi về " + prompt,
-        is_chat_enabled: true,
-        requires: [],
-        next: ["node2", "node3"],
-        level: 0,
-        position_x: 400,
-        position_y: 50,
-      },
-      {
-        temp_id: "node2",
-        title: "Các thành phần cơ bản",
-        description: "Tìm hiểu chi tiết về các thành phần và cấu trúc",
-        prompt_sample: "Các thành phần chính là gì?",
-        is_chat_enabled: true,
-        requires: ["node1"],
-        next: ["node4"],
-        level: 1,
-        position_x: 200,
-        position_y: 200,
-      },
-      {
-        temp_id: "node3",
-        title: "Ứng dụng thực tế",
-        description: "Khám phá các ứng dụng và ví dụ thực tế",
-        prompt_sample: "Cho ví dụ về ứng dụng thực tế",
-        is_chat_enabled: true,
-        requires: ["node1"],
-        next: ["node4"],
-        level: 1,
-        position_x: 600,
-        position_y: 200,
-      },
-      {
-        temp_id: "node4",
-        title: "Thực hành và dự án",
-        description: "Áp dụng kiến thức vào thực hành",
-        prompt_sample: "Hướng dẫn tôi làm một dự án nhỏ",
-        is_chat_enabled: true,
-        requires: ["node2", "node3"],
-        next: [],
-        level: 2,
-        position_x: 400,
-        position_y: 350,
-      },
-    ];
-
-    return {
-      tree: baseNodes,
-      topicName: `Học về ${prompt}`,
-      description: `Lộ trình học tập toàn diện về ${prompt} từ cơ bản đến nâng cao`,
-    };
   }
 }
 

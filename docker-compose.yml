@@ -24,6 +24,8 @@ services:
     restart: unless-stopped
     ports:
       - "3001:3001"
+    depends_on:
+      - langchain-python
     environment:
       PORT: 3001
       FRONTEND_URL: http://localhost:3000
