@@ -134,3 +134,30 @@ Hệ thống kết hợp sức mạnh của Supabase và NextAuth:
 3.  Khi người dùng nhấp vào một nút cụ thể, giao diện sẽ chuyển sang **Node-Level Chat**.
 4.  Mọi cuộc trò chuyện từ đây sẽ tập trung vào ngữ cảnh của nút đó, cho phép AI cung cấp các câu trả lời chính xác và chuyên sâu hơn.
 5.  Người dùng có thể dễ dàng quay lại Topic-Level Chat bằng cách chọn lại chủ đề từ thanh bên.
+
+## 🚀 Tính năng mới: Smart Notes với Auto-Save
+
+### ✨ Cập nhật Notes Panel
+
+- **Edit in-place**: Click vào note để chỉnh sửa trực tiếp
+- **Auto-save debounced**: Tự động lưu sau 2 giây không có thay đổi
+- **Ctrl+S**: Lưu ngay lập tức
+- **Save on exit**: Tự động lưu khi nhấn "Quay lại"
+- **Visual feedback**: Hiển thị trạng thái "Chưa lưu", "Đang lưu..."
+- **Hover effects**: UI cải thiện với edit icons
+
+### 🔄 Workflow
+
+1. **Tạo note mới**: Nhấn "Thêm ghi chú mới"
+2. **Edit note**: Click vào note có sẵn để chỉnh sửa
+3. **Auto-save**: Hệ thống tự động lưu sau 2 giây
+4. **Manual save**: Nhấn Ctrl+S hoặc nút "Lưu"
+5. **Exit safe**: Nhấn "Quay lại" sẽ tự động lưu và thoát
+
+### 🎯 Technical Features
+
+- **Debounce mechanism**: Tránh spam requests
+- **Smart create/update**: Tự động phân biệt create vs update
+- **Error handling**: Xử lý lỗi graceful
+- **Type safety**: Full TypeScript support
+- **Backend integration**: Tích hợp hoàn chỉnh với API
