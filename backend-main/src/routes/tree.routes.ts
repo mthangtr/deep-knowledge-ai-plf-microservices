@@ -10,7 +10,7 @@ const router = Router();
 router.post("/", authenticate, async (req: AuthRequest, res) => {
   try {
     const userId = req.user!.id;
-    const { title, description, prompt, tree } = req.body;
+    const { title, description, tree } = req.body;
 
     // Validate input
     if (!title || !description || !Array.isArray(tree) || tree.length === 0) {
@@ -20,24 +20,11 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
       });
     }
 
-    // Validate tree nodes
-    for (const node of tree) {
-      if (!node.title || !node.description) {
-        return res.status(400).json({
-          error: "Mỗi node trong tree cần có title và description",
-        });
-      }
-    }
-
     // Start transaction: Tạo topic trước
     const newTopic = {
       user_id: userId,
       title: title.trim(),
       description: description.trim(),
-      prompt: prompt?.trim() || null,
-      is_active: true,
-      total_nodes: tree.length,
-      completed_nodes: 0,
     };
 
     const { data: createdTopic, error: topicError } = await supabase
@@ -68,7 +55,10 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
       const tempId = node.temp_id || node.id;
       const realId = tempIdMap.get(tempId) || randomUUID();
 
-      // Resolve requires/next từ temp_id sang real UUID
+      // Resolve parent, requires, next from temp_id to real UUID
+      const parentId = node.parent_id
+        ? tempIdMap.get(node.parent_id) || null
+        : null;
       const resolvedRequires = (node.requires || [])
         .map((reqTempId: string) => tempIdMap.get(reqTempId))
         .filter(Boolean);
@@ -79,16 +69,16 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
       return {
         id: realId,
         topic_id: createdTopic.id,
+        parent_id: parentId,
         title: node.title.trim(),
         description: node.description.trim(),
         prompt_sample: node.prompt_sample?.trim() || null,
-        is_chat_enabled: node.is_chat_enabled !== false,
         requires: resolvedRequires,
         next: resolvedNext,
         level: node.level || 0,
         position_x: node.position_x || 0,
         position_y: node.position_y || 0,
-        is_completed: false,
+        is_completed: false, // Default value, progress is tracked elsewhere
       };
     });
 
@@ -99,10 +89,8 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
 
     if (nodesError) {
       console.error("Lỗi tạo nodes:", nodesError);
-
       // Rollback: Xóa topic đã tạo
       await supabase.from("learning_topics").delete().eq("id", createdTopic.id);
-
       return res.status(500).json({
         error: "Không thể tạo tree nodes",
         details: nodesError.message,
@@ -110,17 +98,11 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
     }
 
     return res.status(201).json({
-      success: true,
-      data: {
-        topic: createdTopic,
-        nodes: createdNodes || [],
-        treeData: {
-          tree: createdNodes || [],
-        },
-      },
       message: `Đã tạo thành công topic "${createdTopic.title}" với ${
         createdNodes?.length || 0
       } nodes`,
+      topic: createdTopic,
+      nodes: createdNodes || [],
     });
   } catch (error) {
     console.error("Lỗi server:", error);

@@ -7,31 +7,24 @@ import { AuthRequest } from "../types";
 
 const router = Router();
 
-interface GenerateRequest {
-  prompt: string;
-}
-
 // POST /api/learning/generate - Generate learning tree from user prompt via LangChain Service
 router.post("/", authenticate, async (req: AuthRequest, res) => {
   try {
     const userId = req.user!.id;
-    const body: GenerateRequest = req.body;
+    const { prompt } = req.body;
 
-    // Validate input
-    if (
-      !body.prompt ||
-      typeof body.prompt !== "string" ||
-      body.prompt.trim().length < 3
-    ) {
-      return res.status(400).json({
-        error: "Prompt không hợp lệ. Yêu cầu ít nhất 3 ký tự.",
-      });
+    if (!prompt || typeof prompt !== "string" || prompt.trim().length < 3) {
+      return res
+        .status(400)
+        .json({ error: "Prompt không hợp lệ. Yêu cầu ít nhất 3 ký tự." });
     }
 
-    const prompt = body.prompt.trim();
+    const trimmedPrompt = prompt.trim();
 
-    // Call the new LangChain service to generate the tree
-    const aiResponse = await aiGenerationService.generateLearningTree(prompt);
+    // Call the LangChain service to generate the tree
+    const aiResponse = await aiGenerationService.generateLearningTree(
+      trimmedPrompt
+    );
 
     if (!aiResponse.success || !aiResponse.data || !aiResponse.data.tree) {
       return res.status(502).json({
@@ -45,12 +38,12 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
     // Start transaction: Create the topic first
     const newTopic = {
       user_id: userId,
-      title: treeData.topicName,
-      description: treeData.description,
-      prompt: prompt,
-      is_active: true,
-      total_nodes: treeData.tree.length,
-      completed_nodes: 0,
+      title:
+        treeData.topicName ||
+        `Chủ đề cho: ${trimmedPrompt.substring(0, 50)}...`,
+      description:
+        treeData.description ||
+        `Được tạo bởi AI cho prompt: "${trimmedPrompt}"`,
     };
 
     const { data: createdTopic, error: topicError } = await supabase
@@ -69,18 +62,18 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
 
     // Map temp_id to real UUIDs
     const tempIdMap = new Map<string, string>();
-    const realIdToTempIdMap = new Map<string, string>();
     treeData.tree.forEach((node: any) => {
       if (node.temp_id && !tempIdMap.has(node.temp_id)) {
-        const realId = randomUUID();
-        tempIdMap.set(node.temp_id, realId);
-        realIdToTempIdMap.set(realId, node.temp_id);
+        tempIdMap.set(node.temp_id, randomUUID());
       }
     });
 
     // Prepare tree nodes with real UUIDs and relationships
     const nodes = treeData.tree.map((node: any) => {
       const realId = tempIdMap.get(node.temp_id) || randomUUID();
+      const parentId = node.parent_id
+        ? tempIdMap.get(node.parent_id) || null
+        : null;
       const resolvedRequires = (node.requires || [])
         .map((reqId: string) => tempIdMap.get(reqId))
         .filter(Boolean);
@@ -91,21 +84,21 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
       return {
         id: realId,
         topic_id: createdTopic.id,
+        parent_id: parentId,
         title: node.title,
         description: node.description,
         prompt_sample: node.prompt_sample || null,
-        is_chat_enabled: node.is_chat_enabled !== false,
         requires: resolvedRequires,
         next: resolvedNext,
         level: node.level || 0,
-        position_x: 0,
-        position_y: 0,
+        position_x: node.position_x || 0,
+        position_y: node.position_y || 0,
         is_completed: false,
       };
     });
 
     // Insert nodes into the database
-    const { data: _createdNodes, error: nodesError } = await supabase
+    const { data: createdNodes, error: nodesError } = await supabase
       .from("tree_nodes")
       .insert(nodes)
       .select();
@@ -120,16 +113,10 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
       });
     }
 
-    // Enrich the original tree structure with the real UUIDs from the database
-    const enrichedNodes = treeData.tree.map((originalNode: any) => ({
-      ...originalNode, // Keeps all original fields: temp_id, level, requires (with temp_ids), next (with temp_ids)
-      id: tempIdMap.get(originalNode.temp_id) || null, // Adds the new permanent UUID
-    }));
-
     return res.status(201).json({
       message: "Tạo và import learning tree thành công!",
       topic: createdTopic,
-      nodes: enrichedNodes,
+      nodes: createdNodes || [],
     });
   } catch (error) {
     console.error("Lỗi generate learning tree:", error);
@@ -145,7 +132,7 @@ router.get("/", (_req, res) => {
   return res.json({
     service: "AI Learning Tree Generation",
     description:
-      "This service now uses an internal LangChain service to generate learning paths.",
+      "This service uses an internal LangChain service to generate learning paths.",
     langchain_service_url:
       process.env.LANGCHAIN_SERVICE_URL || "Configured in environment",
   });

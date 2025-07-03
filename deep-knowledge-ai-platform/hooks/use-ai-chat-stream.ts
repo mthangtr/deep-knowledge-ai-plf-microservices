@@ -52,18 +52,26 @@ export function useAIChatStream() {
           token = jwtCookie ? jwtCookie.split("=")[1] : null;
         }
 
+        const payload = {
+          topic_id: topicId,
+          node_id: nodeId,
+          message: message.trim(),
+          session_id: sessionId,
+        };
+
+        // 🐛 DEBUG: Log the payload before sending
+        console.log(
+          "🚀 [FRONTEND REQUEST] Sending to /smart-chat:",
+          JSON.stringify(payload, null, 2)
+        );
+
         const response = await fetch(API_ENDPOINTS.chat.aiStream, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            topic_id: topicId,
-            node_id: nodeId,
-            message: message.trim(),
-            session_id: sessionId,
-          }),
+          body: JSON.stringify(payload),
         });
 
         if (!response.body) {
