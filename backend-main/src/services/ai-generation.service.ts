@@ -25,7 +25,7 @@ class AIGenerationService {
           headers: {
             "Content-Type": "application/json",
           },
-          timeout: 120000, // 120 seconds timeout for potentially long generation
+          timeout: 5 * 60 * 1000, // 120 seconds timeout for potentially long generation
         }
       );
 

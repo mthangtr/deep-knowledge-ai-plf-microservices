@@ -1,6 +1,6 @@
 import { Request } from "express";
 import jwt from "jsonwebtoken";
-import { supabase, supabaseAdmin } from "../config/supabase";
+import { supabaseAdmin } from "../config/supabase";
 import { JWT_SECRET } from "../config/jwt";
 import { User } from "../types";
 
@@ -36,7 +36,10 @@ export const validateTopicOwnership = async (
   topicId: string,
   userId: string
 ): Promise<boolean> => {
-  const { data, error } = await supabase
+  if (!supabaseAdmin) {
+    throw new Error("Supabase admin client is required for this operation.");
+  }
+  const { data, error } = await supabaseAdmin
     .from("learning_topics")
     .select("user_id")
     .eq("id", topicId)
@@ -70,6 +73,7 @@ export const validateNodeOwnership = async (
 };
 
 // Ensures a user profile exists for the given user, creating one if it doesn't.
+// This function handles potential race conditions.
 export const getOrCreateUserProfile = async (user: {
   id: string;
   email?: string;
@@ -80,24 +84,8 @@ export const getOrCreateUserProfile = async (user: {
     throw new Error("Supabase admin client is required for this operation.");
   }
 
-  // 1. Check if profile already exists
-  const { data: existingProfile, error: fetchError } = await supabaseAdmin
-    .from("user_profiles")
-    .select("id")
-    .eq("id", user.id)
-    .single();
-
-  if (fetchError && fetchError.code !== "PGRST116") {
-    // PGRST116 = no rows found
-    throw new Error(`Error fetching user profile: ${fetchError.message}`);
-  }
-
-  // 2. If profile exists, return it
-  if (existingProfile) {
-    return existingProfile;
-  }
-
-  // 3. If not, create a new profile
+  // First, try to insert the user.
+  // This is more efficient than SELECT-then-INSERT in the common case (new user).
   const { data: newProfile, error: createError } = await supabaseAdmin
     .from("user_profiles")
     .insert({
@@ -105,15 +93,50 @@ export const getOrCreateUserProfile = async (user: {
       email: user.email,
       full_name: user.name,
       avatar_url: user.image,
+      last_login_at: new Date().toISOString(), // Update last login time
     })
     .select("id")
     .single();
 
+  // If the insert was successful, we're done.
+  if (!createError && newProfile) {
+    return newProfile;
+  }
+
+  // If the error is a duplicate key violation, it means the user already exists.
+  // This is the expected "failure" in a race condition.
+  if (createError && createError.code === "23505") {
+    // 23505 is the code for unique_violation
+    // The user exists, so let's fetch their profile.
+    const { data: existingProfile, error: fetchError } = await supabaseAdmin
+      .from("user_profiles")
+      .select("id")
+      .eq("id", user.id)
+      .single();
+
+    if (fetchError) {
+      // This would be an unexpected error.
+      throw new Error(
+        `Failed to fetch existing user profile after insert attempt: ${fetchError.message}`
+      );
+    }
+
+    // Also update their last login time
+    await supabaseAdmin
+      .from("user_profiles")
+      .update({ last_login_at: new Date().toISOString() })
+      .eq("id", user.id);
+
+    return existingProfile;
+  }
+
+  // If it's a different error, we should throw it.
   if (createError) {
     throw new Error(`Could not create user profile: ${createError.message}`);
   }
 
-  return newProfile;
+  // Fallback in case insert somehow fails without an error but returns no data
+  return null;
 };
 
 export const validateSessionOwnership = async (

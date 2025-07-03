@@ -19,8 +19,14 @@ router.get("/", authenticate, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: "Yêu cầu phải có node_id" });
     }
 
-    // Kiểm tra xem người dùng có quyền sở hữu cái node này không (thông qua topic)
+    // DEBUGGING LOGS
+    console.log(
+      `[DEBUG] Checking ownership for user: ${userId} on node: ${node_id}`
+    );
     const hasAccess = await validateNodeOwnership(node_id, userId);
+    console.log(`[DEBUG] hasAccess result: ${hasAccess}`);
+
+    // Kiểm tra xem người dùng có quyền sở hữu cái node này không (thông qua topic)
     if (!hasAccess) {
       return res
         .status(403)
