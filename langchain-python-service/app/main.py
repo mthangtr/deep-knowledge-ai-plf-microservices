@@ -170,8 +170,7 @@ async def smart_chat(request: SmartChatRequest):
                 user_id=request.user_id,
                 session_id=request.session_id,
                 topic_id=request.topic_id,
-                node_id=request.node_id,
-                title=f"Chat - {request.message[:50]}..."
+                node_id=request.node_id
             )
             # logger.debug(f"🚀 [SMART-CHAT] Session: {session_id[:8]}...")
             
