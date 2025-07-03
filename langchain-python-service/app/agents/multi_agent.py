@@ -118,12 +118,16 @@ Hãy tương tác một cách thân thiện, động viên và hỗ trợ tốt 
         message: str,
         context: List[Dict[str, str]] = [],
         system_prompt: Optional[str] = None,
-        options: Optional[Dict[str, Any]] = {}
+        options: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[str, None]:
         """Single agent chat với streaming response"""
         start_time = time.time()
         
         try:
+            # Handle None options
+            if options is None:
+                options = {}
+            
             # Separate model name from other options for the factory method
             model_name = options.pop("model", None)
             llm = LLMConfig.get_llm(model_name=model_name, **options)
@@ -148,7 +152,15 @@ Hãy tương tác một cách thân thiện, động viên và hỗ trợ tốt 
             logger.info(f"Starting streaming response with {len(messages)} message(s) in context.")
             
             async for chunk in llm.astream(messages):
-                yield chunk.content
+                # Ensure we always yield string content
+                if hasattr(chunk, 'content'):
+                    content = chunk.content
+                    if isinstance(content, list):
+                        yield " ".join(str(item) for item in content)
+                    else:
+                        yield str(content)
+                else:
+                    yield str(chunk)
             
             # An async generator implicitly ends when the loop is done.
             # No 'return' with a value is allowed.

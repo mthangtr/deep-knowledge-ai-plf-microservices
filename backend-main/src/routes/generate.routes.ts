@@ -69,9 +69,12 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
 
     // Map temp_id to real UUIDs
     const tempIdMap = new Map<string, string>();
+    const realIdToTempIdMap = new Map<string, string>();
     treeData.tree.forEach((node: any) => {
       if (node.temp_id && !tempIdMap.has(node.temp_id)) {
-        tempIdMap.set(node.temp_id, randomUUID());
+        const realId = randomUUID();
+        tempIdMap.set(node.temp_id, realId);
+        realIdToTempIdMap.set(realId, node.temp_id);
       }
     });
 
@@ -102,7 +105,7 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
     });
 
     // Insert nodes into the database
-    const { data: createdNodes, error: nodesError } = await supabase
+    const { data: _createdNodes, error: nodesError } = await supabase
       .from("tree_nodes")
       .insert(nodes)
       .select();
@@ -117,10 +120,16 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
       });
     }
 
+    // Enrich the original tree structure with the real UUIDs from the database
+    const enrichedNodes = treeData.tree.map((originalNode: any) => ({
+      ...originalNode, // Keeps all original fields: temp_id, level, requires (with temp_ids), next (with temp_ids)
+      id: tempIdMap.get(originalNode.temp_id) || null, // Adds the new permanent UUID
+    }));
+
     return res.status(201).json({
       message: "Tạo và import learning tree thành công!",
       topic: createdTopic,
-      nodes: createdNodes || [],
+      nodes: enrichedNodes,
     });
   } catch (error) {
     console.error("Lỗi generate learning tree:", error);

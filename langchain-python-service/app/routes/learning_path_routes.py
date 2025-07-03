@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Response, status
 from loguru import logger
 
 from app.services.learning_path_service import LearningPathService
@@ -9,24 +9,24 @@ router = APIRouter(
     tags=["Learning Path Generation"]
 )
 
-@router.post("/generate", response_model=LearningPathResponse)
+@router.post("/generate")
 async def generate_learning_path(request: GeneratePathRequest = Body(...)):
     """
     Generates a comprehensive, hierarchical learning path from a single user request.
-
-    This endpoint uses a multi-agent system to:
-    1.  Interpret the user's request.
-    2.  Generate a course outline and metadata in parallel.
-    3.  Parse and structure the outline into a ready-to-use JSON tree.
+    Returns a raw JSON string for the backend-main to process.
     """
     try:
         logger.info(f"Received request to generate learning path.")
         service = LearningPathService()
-        path = await service.generate_path(request.message)
-        return path
+        # The service now returns a raw JSON string
+        path_json_string = await service.generate_path(request.message)
+        
+        # Return the raw JSON string with the correct media type
+        return Response(content=path_json_string, media_type="application/json")
+
     except ValueError as e:
         logger.warning(f"Value error during path generation: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"An unexpected error occurred during path generation: {e}")
-        raise HTTPException(status_code=500, detail="An internal server error occurred.") 
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An internal server error occurred.") 

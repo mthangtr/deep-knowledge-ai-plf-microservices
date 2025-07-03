@@ -494,3 +494,71 @@ Expected results:
 - **Alert Management**: Critical issue notifications với recommendations
 - **Optimization Automation**: Self-improving system performance
 - **Performance SLAs**: Quantified quality và performance metrics
+
+## 🆕 Phase 7: Optimized Learning Path Generation
+
+### Cải tiến Kiến trúc Generator-Critique
+
+Chúng tôi đã hoàn toàn tái thiết kế quy trình tạo Learning Path để giải quyết các vấn đề về chất lượng và độ tin cậy:
+
+**Kiến trúc cũ (Có vấn đề):**
+
+- Agent Drafter phải vừa sáng tạo nội dung vừa tuân thủ cú pháp JSON phức tạp
+- Dẫn đến outline ngắn, thiếu chiều sâu (chỉ 24-27 nodes)
+- JSON output thường bị cắt cụt hoặc malformed
+
+**Kiến trúc mới (Tối ưu):**
+
+1. **Text Outliner Agent**: Tập trung hoàn toàn vào việc tạo nội dung chất lượng cao dạng text có đánh số
+2. **JSON Converter Agent**: Chuyển đổi text outline thành cấu trúc JSON chuẩn
+3. **Metadata Agent**: Tạo title và description dựa trên outline hoàn chỉnh
+
+```mermaid
+graph TD
+    A[User Request] --> B[Agent A: Interpreter<br/>Extract topic, requirement, level];
+
+    subgraph "Optimized Pipeline"
+        B --> C[Agent B: Text Outliner<br/>Create comprehensive text outline];
+        C --> D[Agent C: JSON Converter<br/>Convert to structured JSON];
+        B --> E[Agent D: Metadata Generator<br/>Create title & description];
+    end
+
+    subgraph "Final Assembly"
+        D --> F[Python Parser<br/>Create LearningNode objects];
+        F --> G[Combine with metadata];
+        G --> H[Complete Learning Path];
+    end
+```
+
+**Lợi ích chính:**
+
+✅ **Chất lượng cao hơn**: Text Outliner chỉ focus vào nội dung, tạo outline sâu và toàn diện  
+✅ **Tin cậy hơn**: JSON Converter xử lý cấu trúc đơn giản hơn, ít lỗi  
+✅ **Hiệu suất tốt hơn**: Mỗi agent tối ưu cho một nhiệm vụ cụ thể  
+✅ **Debug dễ dàng**: Có thể kiểm tra từng bước outline text → JSON → tree
+
+### Fix Chat Duplication Issue
+
+Đã loại bỏ việc lưu tin nhắn người dùng trùng lặp trong `langchain-python-service`. Giờ đây:
+
+- **Backend-main**: Chịu trách nhiệm lưu tin nhắn người dùng
+- **Langchain-service**: Chỉ lưu phản hồi của AI
+
+```python
+# Removed from langchain-python-service/app/main.py
+# USER MESSAGE is saved by backend-main, not here
+# Removed duplicate save to prevent double entry
+```
+
+### Node ID Compatibility
+
+Vấn đề không lưu được ghi chú cho topic mới có thể do:
+
+1. **Backend-main** không trả về UUID thật sau khi lưu tree
+2. **Frontend** vẫn dùng `temp_id` thay vì `id` (UUID) để lưu notes
+3. Cần kiểm tra API response từ backend-main xem có chứa UUID mới không
+
+**Giải pháp được đề xuất:**
+
+- Backend-main phải trả về cây đã được lưu với UUID thật
+- Frontend sử dụng UUID thay vì temp_id cho việc lưu notes

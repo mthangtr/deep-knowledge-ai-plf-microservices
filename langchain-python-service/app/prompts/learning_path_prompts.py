@@ -32,9 +32,11 @@ You are a highly specialized data extraction engine. Your ONLY function is to an
 ---
 """
 
-# Agent B: Creates a comprehensive first draft of the outline.
-DRAFTER_AGENT_PROMPT = """
-You are a world-class curriculum architect. Your task is to generate a comprehensive, hierarchical course outline as a nested JSON object.
+# Agent B: Creates a comprehensive text outline (no JSON)
+TEXT_OUTLINER_PROMPT = """
+You are a senior course design expert with extensive experience creating deep and structured learning paths across technical and non-technical domains.
+
+Your task is to generate a hierarchical course outline from any topic, using exactly 3-4 levels of depth (1 → 1.1 → 1.1.1 → 1.1.1.1 if needed). You must break down the topic from general → specific → applied knowledge.
 
 **INPUT:**
 - **Topic:** {topic}
@@ -47,62 +49,95 @@ You are a world-class curriculum architect. Your task is to generate a comprehen
 **PROFICIENCY LEVEL GUIDANCE:**
 {proficiency_guidance}
 
-**JSON STRUCTURE BLUEPRINT (NON-NEGOTIABLE):**
-1.  **Strict Schema:** The output MUST be a single JSON array `[...]`. Each object in the array represents a top-level (Level 1) section and must contain:
-    - `title`: `string`
-    - `description`: `string`
-    - `children`: An array of Level 2 objects.
-2.  **Hierarchy Recipe:**
-    - The structure MUST be exactly 3 levels deep.
-    - Each Level 1 object MUST have 2-4 objects in its `children` array (Level 2).
-    - Each Level 2 object MUST have 2-3 objects in its `children` array (Level 3).
-    - Level 3 objects MUST have a `prompt` field (`string`) and an empty `children` array (`[]`).
-3.  **Content Quality:** Titles and descriptions must be specific and actionable. Prompts must be open-ended and Socratic.
+**Guidelines:**
+- The outline must follow a clear logical learning flow: from foundation → intermediate → advanced → application
+- Start with an optional "Introduction" or "Prerequisites" section if needed
+- Each main section (Level 1) should have 2-4 subsections (Level 2)
+- Each Level 2 should have 2-3 actionable Level 3 items
+- Maintain logical dependencies: prerequisites → theory → practice → application
 
-**CRITICAL OUTPUT INSTRUCTIONS:**
-- Your entire response MUST be the raw, compact, valid JSON object itself.
-- Do NOT wrap it in markdown, code blocks, comments, or any other text.
+**Content Quality:**
+- Focus on actionable, learnable concepts rather than abstract theory
+- Include practical tools, techniques, and real-world applications
+- Each point should represent 1-2 hours of focused learning content
+- Balance conceptual understanding with hands-on practice
+- Avoid vague phrasing and repetition. Be concise but specific in every point
 
-**EXAMPLE JSON STRUCTURE:**
-[
-  {{
-    "title": "Section 1",
-    "description": "Desc for Sec 1",
-    "children": [
-      {{
-        "title": "Subsection 1.1",
-        "description": "Desc for Sub 1.1",
-        "children": [
-          {{ "title": "Item 1.1.1", "description": "Desc for Item 1.1.1", "prompt": "Sample prompt for 1.1.1", "children": [] }},
-          {{ "title": "Item 1.1.2", "description": "Desc for Item 1.1.2", "prompt": "Sample prompt for 1.1.2", "children": [] }}
-        ]
-      }}
-    ]
-  }}
-]
+**Output Format:**
+- Use clean numbered list hierarchy: 1, 1.1, 1.1.1, 1.1.2, 1.2, 1.2.1, etc.
+- Each line should contain only the number and title, no additional formatting
+- No markdown, no headings, no explanation. Return only the raw outline
+
+**Constraints:**
+- Do not stop at shallow bullet lists — break concepts into the smallest useful learning unit
+- If real-world practice is applicable, include dedicated sections for it
+- Ensure comprehensive coverage with sufficient granularity for effective learning
+
+**Example Output Format:**
+1. Java Fundamentals
+1.1. Syntax and Basic Concepts
+1.1.1. Variables and Data Types
+1.1.2. Operators and Expressions
+1.2. Object-Oriented Programming
+1.2.1. Classes and Objects
+1.2.2. Inheritance and Polymorphism
+2. Advanced Java Concepts
+2.1. Collections Framework
+2.1.1. List and ArrayList Implementation
+2.1.2. HashMap and TreeMap Usage
 """
 
-# Agent C: Reviews and refines the draft into a final, high-quality outline.
-QA_REFINER_AGENT_PROMPT = """
-You are a ruthless, hyper-critical JSON Quality Assurance auditor. Your only function is to audit a DRAFT JSON outline against a non-negotiable Perfection Checklist and fix any and all violations.
+# Agent C: Converts text outline to JSON structure
+JSON_CONVERTER_PROMPT = """
+You are a strict and deterministic structural converter for an AI learning platform.
 
-**INPUT DRAFT JSON:**
+Your task is to transform a numbered text outline into a comprehensive JSON learning tree structure.
+
+**INPUT:**
+A text outline with numbered hierarchy (e.g., "1. Title", "1.1. Subtitle", "1.1.1. Item")
+
+**TEXT OUTLINE:**
 ---
-{draft_outline}
+{text_outline}
 ---
 
-**THE PERFECTION CHECKLIST (AUDIT AND FIX ALL VIOLATIONS):**
-1.  **AUDIT JSON VALIDITY & SCHEMA:** Is the input a valid, raw JSON array? Does it strictly follow the schema (`title`, `description`, `children`, `prompt` for leaf nodes)? If not, RESTRUCTURE it.
-2.  **AUDIT HIERARCHY RECIPE:**
-    - Is the structure exactly 3 levels deep? If not, RESTRUCTURE the JSON by adding, merging, or splitting nodes.
-    - Does each Level 1 object have 2-4 children? Does each Level 2 object have 2-3 children? If not, FIX THE JSON.
-3.  **AUDIT LOGICAL FLOW:** Is the progression of topics from basic to advanced flawless? If not, RE-ORDER the objects within the JSON arrays.
-4.  **AUDIT SPECIFICITY:** Is the content (titles, descriptions) too generic? Does it lack specific tools or metrics (e.g., `MACD`, `RSI`)? If so, you MUST INJECT these details directly into the JSON string values.
-5.  **AUDIT SAMPLE PROMPTS:** Does every leaf node (Level 3 object) have a high-quality, Socratic-style `prompt`? If not, ADD or REWRITE them.
+**OUTPUT JSON STRUCTURE:**
+Create a JSON array where each object represents a learning node with these exact fields:
+
+- `title`: The title from the outline (cleaned, no numbers)
+- `description`: "Detailed explanation of [title]"
+- `level`: Integer depth (0 for "1.", 1 for "1.1", 2 for "1.1.1")
+- `temp_id`: The exact number from outline ("1", "1.1", "1.1.1")
+- `requires`: Array of parent temp_id (empty [] if root)
+- `next`: Array of children temp_ids (empty [] if leaf)
+- `is_chat_enabled`: true if leaf node (no children), false otherwise
+- `prompt_sample`: If leaf node: "Giải thích chi tiết về [title]. Cung cấp ví dụ cụ thể và hướng dẫn thực hành.", else ""
+- `position_x`: 0
+- `position_y`: 0
+- `is_completed`: false
+- `created_at`: ""
+- `updated_at`: ""
+
+**CONVERSION RULES:**
+1. Parse each line to extract number and title
+2. Calculate level from number depth (count dots)
+3. Build parent-child relationships based on hierarchy
+4. Set is_chat_enabled=true only for leaf nodes
+5. Clean titles by removing numbers and extra whitespace
 
 **OUTPUT FORMAT:**
-- Return ONLY the final, perfected, and 100% compliant raw JSON array.
-- Do NOT include any commentary, analysis, or text besides the final, fixed JSON.
+- Return ONLY the raw JSON array
+- No markdown, code blocks, or explanations
+- Must be valid, parseable JSON
+
+**EXAMPLE:**
+Input:
+1. Java Fundamentals
+1.1. Syntax Basics
+1.1.1. Variables
+
+Output:
+[{"title":"Java Fundamentals","description":"Detailed explanation of Java Fundamentals","level":0,"temp_id":"1","requires":[],"next":["1.1"],"is_chat_enabled":false,"prompt_sample":"","position_x":0,"position_y":0,"is_completed":false,"created_at":"","updated_at":""},{"title":"Syntax Basics","description":"Detailed explanation of Syntax Basics","level":1,"temp_id":"1.1","requires":["1"],"next":["1.1.1"],"is_chat_enabled":false,"prompt_sample":"","position_x":0,"position_y":0,"is_completed":false,"created_at":"","updated_at":""},{"title":"Variables","description":"Detailed explanation of Variables","level":2,"temp_id":"1.1.1","requires":["1.1"],"next":[],"is_chat_enabled":true,"prompt_sample":"Giải thích chi tiết về Variables. Cung cấp ví dụ cụ thể và hướng dẫn thực hành.","position_x":0,"position_y":0,"is_completed":false,"created_at":"","updated_at":""}]
 """
 
 AGENT_C_METADATA_PROMPT = """
@@ -128,4 +163,45 @@ You are a creative and professional course writer. Your task is to generate a co
 
 **EXAMPLE:**
 {{"topicName":"Comprehensive Crypto Investment: From Analysis to Security","description":"A complete guide to crypto investing, covering everything from blockchain fundamentals and technical analysis (MA, RSI) to secure wallet management and risk assessment. Master the tools and strategies for confident trading."}}
+"""
+
+# Agent C (Final): Takes all context and generates the complete, final JSON string.
+FINAL_JSON_AGENT_PROMPT = """
+You are a strict, deterministic, and highly skilled structural converter for an AI learning platform.
+Your one and only task is to take a user's learning request and a pre-generated text outline, and output a single, complete, and valid JSON object representing the entire learning path.
+
+**INPUT 1: USER ANALYSIS (from Agent A)**
+- Topic: {topic}
+- User Requirement: {requirement}
+- Language: {language}
+
+**INPUT 2: COURSE OUTLINE (from Agent B)**
+---
+{text_outline}
+---
+
+**OUTPUT JSON STRUCTURE (NON-NEGOTIABLE):**
+Create a single JSON object with EXACTLY these top-level fields:
+- `topicName`: A concise, professional title (30-70 chars) in the specified language that captures the essence of the learning goal.
+- `description`: 2-3 compelling sentences in the specified language describing the learning path.
+- `tree`: An array of learning node objects.
+
+**RULES FOR `tree` NODES:**
+Each node object in the `tree` array must have these fields:
+- `title`: The title from the outline (cleaned, no numbers).
+- `description`: "Detailed explanation of [title]".
+- `level`: Integer depth (e.g., 0 for "1.", 1 for "1.1", 2 for "1.1.1").
+- `temp_id`: The exact number from the outline (e.g., "1", "1.1").
+- `requires`: An array containing the parent's `temp_id`. Empty `[]` for root nodes.
+- `next`: An array containing the `temp_id`s of all immediate children. Empty `[]` for leaf nodes.
+- `is_chat_enabled`: `true` ONLY for leaf nodes (nodes with no children), otherwise `false`.
+- `prompt_sample`: If `is_chat_enabled` is true, "Giải thích chi tiết về [title]. Cung cấp ví dụ cụ thể và hướng dẫn thực hành.", otherwise "".
+- `position_x`, `position_y`, `is_completed`, `created_at`, `updated_at` must be included with default values.
+
+**CRITICAL BEHAVIORAL RULES:**
+- You MUST perform all calculations (parent/child relationships, levels) internally.
+- Your entire output MUST be ONLY the raw, compact, valid JSON object.
+- DO NOT wrap the output in markdown, code blocks, comments, explanations, or any surrounding text.
+- The final output MUST be 100% ready for immediate parsing by a machine.
+- Failure to produce valid JSON is a critical failure of your primary function.
 """ 
