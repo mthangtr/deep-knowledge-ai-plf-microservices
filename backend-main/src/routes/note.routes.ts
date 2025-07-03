@@ -1,37 +1,37 @@
 import { Router } from "express";
-import { supabase } from "../config/supabase";
+import { supabaseAdmin } from "../config/supabase";
 import { authenticate } from "../middleware/auth.middleware";
 import { validateNodeOwnership } from "../utils/auth.utils";
 import { AuthRequest } from "../types";
 
 const router = Router();
 
-// GET /api/learning/notes - Get notes by node_id
+// GET /api/learning/notes - CHỈ LẤY NOTES THEO NODE ID
 router.get("/", authenticate, async (req: AuthRequest, res) => {
   try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
     const userId = req.user!.id;
     const { node_id } = req.query;
 
     if (!node_id || typeof node_id !== "string") {
-      return res.status(400).json({
-        error: "Missing or invalid node_id parameter",
-      });
+      return res.status(400).json({ error: "Yêu cầu phải có node_id" });
     }
 
-    // Verify user has access to this node before proceeding
+    // Kiểm tra xem người dùng có quyền sở hữu cái node này không (thông qua topic)
     const hasAccess = await validateNodeOwnership(node_id, userId);
     if (!hasAccess) {
-      return res.status(403).json({
-        error: "Bạn không có quyền truy cập các ghi chú của node này",
-      });
+      return res
+        .status(403)
+        .json({ error: "Bạn không có quyền truy cập ghi chú của node này" });
     }
 
-    // Fetch notes for the given node that belong to the current user
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("learning_notes")
       .select("*")
-      .eq("node_id", node_id)
       .eq("user_id", userId)
+      .eq("node_id", node_id)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -42,20 +42,19 @@ router.get("/", authenticate, async (req: AuthRequest, res) => {
       });
     }
 
-    return res.json({
-      data: data || [],
-    });
+    return res.json({ data: data || [] });
   } catch (error) {
     console.error("Lỗi server:", error);
-    return res.status(500).json({
-      error: "Lỗi server nội bộ",
-    });
+    return res.status(500).json({ error: "Lỗi server nội bộ" });
   }
 });
 
 // POST /api/learning/notes - Create a new note for a node
 router.post("/", authenticate, async (req: AuthRequest, res) => {
   try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
     const userId = req.user!.id;
     const { node_id, content } = req.body;
 
@@ -80,7 +79,7 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
       content: content.trim(),
     };
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("learning_notes")
       .insert([newNote])
       .select()
@@ -106,10 +105,13 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
 // GET /api/learning/notes/:id - Lấy chi tiết note
 router.get("/:id", authenticate, async (req: AuthRequest, res) => {
   try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
     const userId = req.user!.id;
     const noteId = req.params.id;
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("learning_notes")
       .select("*")
       .eq("id", noteId)
@@ -134,6 +136,9 @@ router.get("/:id", authenticate, async (req: AuthRequest, res) => {
 // PUT /api/learning/notes/:id - Cập nhật note
 router.put("/:id", authenticate, async (req: AuthRequest, res) => {
   try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
     const userId = req.user!.id;
     const noteId = req.params.id;
     const { content } = req.body;
@@ -145,7 +150,7 @@ router.put("/:id", authenticate, async (req: AuthRequest, res) => {
     }
 
     // Verify ownership
-    const { data: existingNote } = await supabase
+    const { data: existingNote } = await supabaseAdmin
       .from("learning_notes")
       .select("user_id")
       .eq("id", noteId)
@@ -157,7 +162,7 @@ router.put("/:id", authenticate, async (req: AuthRequest, res) => {
       });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("learning_notes")
       .update({ content: content.trim() })
       .eq("id", noteId)
@@ -183,11 +188,14 @@ router.put("/:id", authenticate, async (req: AuthRequest, res) => {
 // DELETE /api/learning/notes/:id - Xóa note
 router.delete("/:id", authenticate, async (req: AuthRequest, res) => {
   try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
     const userId = req.user!.id;
     const noteId = req.params.id;
 
     // Verify ownership
-    const { data: existingNote } = await supabase
+    const { data: existingNote } = await supabaseAdmin
       .from("learning_notes")
       .select("user_id")
       .eq("id", noteId)
@@ -199,7 +207,7 @@ router.delete("/:id", authenticate, async (req: AuthRequest, res) => {
       });
     }
 
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from("learning_notes")
       .delete()
       .eq("id", noteId);

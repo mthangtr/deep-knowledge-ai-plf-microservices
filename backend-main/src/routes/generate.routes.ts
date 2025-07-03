@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { randomUUID } from "crypto";
-import { supabase } from "../config/supabase";
+import { supabaseAdmin } from "../config/supabase";
 import { authenticate } from "../middleware/auth.middleware";
 import { aiGenerationService } from "../services/ai-generation.service";
 import { AuthRequest } from "../types";
@@ -10,6 +10,9 @@ const router = Router();
 // POST /api/learning/generate - Generate learning tree from user prompt via LangChain Service
 router.post("/", authenticate, async (req: AuthRequest, res) => {
   try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
     const userId = req.user!.id;
     const { prompt } = req.body;
 
@@ -46,7 +49,7 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
         `Được tạo bởi AI cho prompt: "${trimmedPrompt}"`,
     };
 
-    const { data: createdTopic, error: topicError } = await supabase
+    const { data: createdTopic, error: topicError } = await supabaseAdmin
       .from("learning_topics")
       .insert([newTopic])
       .select()
@@ -73,22 +76,25 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
       const tempId = node.temp_id || node.id;
       const realId = tempIdMap.get(tempId) || randomUUID();
 
-      // Resolve requires/next from temp_id to real UUID
-      const resolvedRequires = (node.requires || [])
-        .map((reqTempId: string) => tempIdMap.get(reqTempId))
-        .filter(Boolean); // Filter out any unresolved IDs
+      // NEW: Resolve parent_id from parent_temp_id
+      const parentTempId = node.parent_temp_id;
+      const realParentId = parentTempId ? tempIdMap.get(parentTempId) : null;
 
-      const resolvedNext = (node.next || [])
+      // Updated: Resolve next from next_temp_ids
+      const resolvedNext = (node.next_temp_ids || [])
         .map((nextTempId: string) => tempIdMap.get(nextTempId))
         .filter(Boolean); // Filter out any unresolved IDs
+
+      // For backward compatibility, `requires` can be set based on parent_id
+      const resolvedRequires = realParentId ? [realParentId] : [];
 
       return {
         id: realId,
         topic_id: createdTopic.id,
+        parent_id: realParentId, // Set the parent_id here
         title: node.title,
         description: node.description,
         prompt_sample: node.prompt_sample || null,
-        is_chat_enabled: node.is_chat_enabled !== false,
         requires: resolvedRequires,
         next: resolvedNext,
         level: node.level || 0,
@@ -98,7 +104,7 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
     });
 
     // Insert nodes into the database
-    const { data: createdNodes, error: nodesError } = await supabase
+    const { data: createdNodes, error: nodesError } = await supabaseAdmin
       .from("tree_nodes")
       .insert(nodes)
       .select();
@@ -106,7 +112,10 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
     if (nodesError) {
       console.error("Lỗi tạo nodes:", nodesError);
       // Rollback: Delete the topic if node creation fails
-      await supabase.from("learning_topics").delete().eq("id", createdTopic.id);
+      await supabaseAdmin
+        .from("learning_topics")
+        .delete()
+        .eq("id", createdTopic.id);
       return res.status(500).json({
         error: "Không thể tạo các node của tree",
         details: nodesError.message,

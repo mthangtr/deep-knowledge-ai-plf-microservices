@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { randomUUID } from "crypto";
-import { supabase } from "../config/supabase";
+import { supabaseAdmin } from "../config/supabase";
 import { authenticate } from "../middleware/auth.middleware";
 import { AuthRequest } from "../types";
 
@@ -9,6 +9,9 @@ const router = Router();
 // POST /api/learning/tree - Import tree data (tạo topic mới với nodes)
 router.post("/", authenticate, async (req: AuthRequest, res) => {
   try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
     const userId = req.user!.id;
     const { title, description, tree } = req.body;
 
@@ -27,7 +30,7 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
       description: description.trim(),
     };
 
-    const { data: createdTopic, error: topicError } = await supabase
+    const { data: createdTopic, error: topicError } = await supabaseAdmin
       .from("learning_topics")
       .insert([newTopic])
       .select()
@@ -75,7 +78,7 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
       };
     });
 
-    const { data: createdNodes, error: nodesError } = await supabase
+    const { data: createdNodes, error: nodesError } = await supabaseAdmin
       .from("tree_nodes")
       .insert(nodes)
       .select();
@@ -83,7 +86,10 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
     if (nodesError) {
       console.error("Lỗi tạo nodes:", nodesError);
       // Rollback: Xóa topic đã tạo
-      await supabase.from("learning_topics").delete().eq("id", createdTopic.id);
+      await supabaseAdmin
+        .from("learning_topics")
+        .delete()
+        .eq("id", createdTopic.id);
       return res.status(500).json({
         error: "Không thể tạo tree nodes",
         details: nodesError.message,

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET, JWT_EXPIRES_IN } from "../config/jwt";
+import { getOrCreateUserProfile } from "../utils/auth.utils";
 
 const router = Router();
 
@@ -14,6 +15,14 @@ router.post("/supabase-callback", async (req, res) => {
         error: "Invalid user data",
       });
     }
+    
+    // Ensure a user profile exists before proceeding
+    await getOrCreateUserProfile({
+        id: user.id,
+        email: user.email,
+        name: user.user_metadata?.name || user.email,
+        image: user.user_metadata?.avatar_url || null,
+    });
 
     // Generate JWT token
     const token = jwt.sign(

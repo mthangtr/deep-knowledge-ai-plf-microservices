@@ -1,68 +1,45 @@
 import { Router } from "express";
-import { supabase } from "../config/supabase";
+import { supabaseAdmin } from "../config/supabase";
 import { getAuthenticatedUser } from "../utils/auth.utils";
-import { randomUUID } from "crypto";
 
 const router = Router();
 
 // GET /api/learning/topics
 router.get("/", async (req, res) => {
   try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
     const user = await getAuthenticatedUser(req);
     if (!user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { data: topics, error } = await supabase
+    const { data: topics, error } = await supabaseAdmin
       .from("learning_topics")
       .select(
         `
-        id,
-        title,
-        description,
-        created_at,
-        updated_at
+        *,
+        tree_nodes ( id )
       `
       )
       .eq("user_id", user.id)
+      // .eq("is_active", true) // Tạm thời bỏ để debug
       .order("created_at", { ascending: false });
 
     if (error) {
       console.error("Error fetching topics:", error);
-      return res.status(500).json({ error: "Database error" });
+      return res
+        .status(500)
+        .json({ error: "Database error", details: error.message });
     }
 
-    // Auto-create sample topic if no topics exist
-    if (!topics || topics.length === 0) {
-      const newTopic = {
-        id: randomUUID(),
-        user_id: user.id,
-        title: "Khởi Đầu Hành Trình Học Tập",
-        description: "Topic mẫu để bắt đầu trải nghiệm platform",
-        total_nodes: 5,
-        completed_nodes: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
+    const topicsWithNodeCount = topics.map((topic) => ({
+      ...topic,
+      node_count: topic.tree_nodes.length,
+    }));
 
-      const { data: createdTopic, error: createError } = await supabase
-        .from("learning_topics")
-        .insert([newTopic])
-        .select()
-        .single();
-
-      if (createError) {
-        console.error("Error creating sample topic:", createError);
-        return res.json({ data: [] });
-      }
-
-      return res.json({
-        data: [createdTopic],
-        message: "Topic mẫu đã được tạo tự động",
-      });
-    }
-
-    return res.json({ data: topics });
+    return res.json({ data: topicsWithNodeCount });
   } catch (error) {
     console.error("Error in topics endpoint:", error);
     return res.status(500).json({ error: "Internal server error" });
@@ -72,6 +49,9 @@ router.get("/", async (req, res) => {
 // POST /api/learning - Tạo learning topic mới
 router.post("/", async (req, res) => {
   try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
     const user = await getAuthenticatedUser(req);
     if (!user) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -94,7 +74,7 @@ router.post("/", async (req, res) => {
       is_active: true,
     };
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("learning_topics")
       .insert([newTopic])
       .select()
@@ -120,6 +100,9 @@ router.post("/", async (req, res) => {
 // GET /api/learning/:id - Lấy thông tin topic và nodes
 router.get("/:id", async (req, res) => {
   try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
     const user = await getAuthenticatedUser(req);
     if (!user) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -127,8 +110,8 @@ router.get("/:id", async (req, res) => {
 
     const topicId = req.params.id;
 
-    // Get topic
-    const { data: topic, error: topicError } = await supabase
+    // Get topic using admin client
+    const { data: topic, error: topicError } = await supabaseAdmin
       .from("learning_topics")
       .select(
         `
@@ -145,8 +128,8 @@ router.get("/:id", async (req, res) => {
       });
     }
 
-    // Get nodes
-    const { data: nodes, error: nodesError } = await supabase
+    // Get nodes using admin client
+    const { data: nodes, error: nodesError } = await supabaseAdmin
       .from("tree_nodes")
       .select(
         `
@@ -175,6 +158,9 @@ router.get("/:id", async (req, res) => {
 // PUT /api/learning/:id - Cập nhật topic
 router.put("/:id", async (req, res) => {
   try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
     const user = await getAuthenticatedUser(req);
     if (!user) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -184,7 +170,7 @@ router.put("/:id", async (req, res) => {
     const { title, description, is_active } = req.body;
 
     // Verify ownership
-    const { data: existingTopic } = await supabase
+    const { data: existingTopic } = await supabaseAdmin
       .from("learning_topics")
       .select("user_id")
       .eq("id", topicId)
@@ -201,7 +187,7 @@ router.put("/:id", async (req, res) => {
     if (description !== undefined) updates.description = description.trim();
     if (is_active !== undefined) updates.is_active = is_active;
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("learning_topics")
       .update(updates)
       .eq("id", topicId)
@@ -227,6 +213,9 @@ router.put("/:id", async (req, res) => {
 // DELETE /api/learning/:id - Xóa topic (soft delete)
 router.delete("/:id", async (req, res) => {
   try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
     const user = await getAuthenticatedUser(req);
     if (!user) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -235,7 +224,7 @@ router.delete("/:id", async (req, res) => {
     const topicId = req.params.id;
 
     // Verify ownership
-    const { data: existingTopic } = await supabase
+    const { data: existingTopic } = await supabaseAdmin
       .from("learning_topics")
       .select("user_id")
       .eq("id", topicId)
@@ -248,7 +237,7 @@ router.delete("/:id", async (req, res) => {
     }
 
     // Soft delete by setting is_active = false
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from("learning_topics")
       .update({ is_active: false })
       .eq("id", topicId);
@@ -275,6 +264,9 @@ router.delete("/:id", async (req, res) => {
 // GET /api/learning/:id/nodes - Lấy danh sách nodes của topic
 router.get("/:id/nodes", async (req, res) => {
   try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
     const user = await getAuthenticatedUser(req);
     if (!user) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -283,7 +275,7 @@ router.get("/:id/nodes", async (req, res) => {
     const topicId = req.params.id;
 
     // Verify topic ownership
-    const { data: topic } = await supabase
+    const { data: topic } = await supabaseAdmin
       .from("learning_topics")
       .select("user_id")
       .eq("id", topicId)
@@ -295,7 +287,7 @@ router.get("/:id/nodes", async (req, res) => {
       });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("tree_nodes")
       .select("*")
       .eq("topic_id", topicId)
@@ -323,6 +315,9 @@ router.get("/:id/nodes", async (req, res) => {
 // PUT /api/learning/:id/nodes/:nodeId - Update user progress for a single node
 router.put("/:id/nodes/:nodeId", async (req, res) => {
   try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
     const user = await getAuthenticatedUser(req);
     if (!user) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -338,7 +333,7 @@ router.put("/:id/nodes/:nodeId", async (req, res) => {
     }
 
     // Verify topic ownership to ensure user can "complete" a node in it
-    const { data: topic } = await supabase
+    const { data: topic } = await supabaseAdmin
       .from("learning_topics")
       .select("user_id")
       .eq("id", topicId)
@@ -351,7 +346,7 @@ router.put("/:id/nodes/:nodeId", async (req, res) => {
     }
 
     // Upsert the progress
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("user_learning_progress")
       .upsert(
         {
@@ -384,6 +379,9 @@ router.put("/:id/nodes/:nodeId", async (req, res) => {
 // POST /api/learning/:id/nodes/batch - Update user progress for multiple nodes
 router.post("/:id/nodes/batch", async (req, res) => {
   try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
     const user = await getAuthenticatedUser(req);
     if (!user) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -403,7 +401,7 @@ router.post("/:id/nodes/batch", async (req, res) => {
     }
 
     // Verify topic ownership
-    const { data: topic } = await supabase
+    const { data: topic } = await supabaseAdmin
       .from("learning_topics")
       .select("user_id")
       .eq("id", topicId)
@@ -424,7 +422,7 @@ router.post("/:id/nodes/batch", async (req, res) => {
     }));
 
     // Upsert the progress records
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("user_learning_progress")
       .upsert(progressRecords, { onConflict: "user_id,node_id" })
       .select();

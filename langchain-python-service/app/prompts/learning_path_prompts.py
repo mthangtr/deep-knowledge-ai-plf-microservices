@@ -189,14 +189,15 @@ Each node object in the `tree` array must have these fields:
 - `description`: "Detailed explanation of [title]".
 - `level`: Integer depth (e.g., 0 for "1.", 1 for "1.1", 2 for "1.1.1").
 - `temp_id`: The exact number from the outline (e.g., "1", "1.1").
-- `requires`: An array containing the parent's `temp_id`. Empty `[]` for root nodes.
-- `next`: An array containing the `temp_id`s of all immediate children. Empty `[]` for leaf nodes.
+- `parent_temp_id`: The `temp_id` of the direct parent node. `null` for root nodes.
+- `next_temp_ids`: An array containing the `temp_id`s of all immediate children. Empty `[]` for leaf nodes.
 - `is_chat_enabled`: `true` ONLY for leaf nodes (nodes with no children), otherwise `false`.
 - `prompt_sample`: If `is_chat_enabled` is true, "Giải thích chi tiết về [title]. Cung cấp ví dụ cụ thể và hướng dẫn thực hành.", otherwise "".
-- `position_x`, `position_y` must be included with default values.
+- `position_x`: 0
+- `position_y`: 0
 
 **CRITICAL BEHAVIORAL RULES:**
-- You MUST perform all calculations (parent/child relationships, levels) internally.
+- You MUST perform all calculations for parent/child relationships and levels internally.
 - Your entire output MUST be ONLY the raw, compact, valid JSON object.
 - DO NOT wrap the output in markdown, code blocks, comments, explanations, or any surrounding text.
 - The final output MUST be 100% ready for immediate parsing by a machine.

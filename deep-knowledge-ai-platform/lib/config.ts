@@ -1,6 +1,7 @@
 // API Configuration
 const API_GATEWAY_URL =
   process.env.NEXT_PUBLIC_API_GATEWAY_URL || "http://localhost:8080";
+const LEARNING_BASE = `${API_GATEWAY_URL}/api/learning`;
 
 export const API_ENDPOINTS = {
   // Auth endpoints
@@ -11,40 +12,39 @@ export const API_ENDPOINTS = {
 
   // Learning endpoints
   learning: {
-    topics: `${API_GATEWAY_URL}/api/learning`,
-    topic: (id: string) => `${API_GATEWAY_URL}/api/learning/${id}`,
-    nodes: (topicId: string) =>
-      `${API_GATEWAY_URL}/api/learning/${topicId}/nodes`,
+    topics: LEARNING_BASE,
+    topic: (id: string) => `${LEARNING_BASE}/${id}`,
+    nodes: (topicId: string) => `${LEARNING_BASE}/${topicId}/nodes`,
     node: (topicId: string, nodeId: string) =>
-      `${API_GATEWAY_URL}/api/learning/${topicId}/nodes/${nodeId}`,
-    nodeBatch: (topicId: string) =>
-      `${API_GATEWAY_URL}/api/learning/${topicId}/nodes/batch`,
+      `${LEARNING_BASE}/${topicId}/nodes/${nodeId}`,
+    nodeBatch: (topicId: string) => `${LEARNING_BASE}/${topicId}/nodes/batch`,
   },
 
   // Chat endpoints
   chat: {
-    base: `${API_GATEWAY_URL}/api/learning/chat`,
-    session: () => `${API_ENDPOINTS.chat.base}/session`,
+    base: `${LEARNING_BASE}/chat`,
+    session: () => `${LEARNING_BASE}/chat/session`,
     messages: (sessionId: string) =>
-      `${API_ENDPOINTS.chat.base}/sessions/${sessionId}/messages`,
+      `${LEARNING_BASE}/chat/sessions/${sessionId}/messages`,
     stream: (sessionId: string) =>
-      `${API_ENDPOINTS.chat.base}/sessions/${sessionId}/stream`,
+      `${LEARNING_BASE}/chat/sessions/${sessionId}/stream`,
+    ai: `${LEARNING_BASE}/chat/ai`,
   },
 
   // Notes endpoints
   notes: {
-    list: `${API_GATEWAY_URL}/api/learning/notes`,
-    detail: (id: string) => `${API_GATEWAY_URL}/api/learning/notes/${id}`,
+    list: `${LEARNING_BASE}/notes`,
+    detail: (id: string) => `${LEARNING_BASE}/notes/${id}`,
   },
 
   // Tree endpoints
   tree: {
-    import: `${API_GATEWAY_URL}/api/learning/tree`,
+    import: `${LEARNING_BASE}/tree`,
   },
 
   // Generate endpoints
   generate: {
-    tree: `${API_GATEWAY_URL}/api/learning/generate`,
+    tree: `${LEARNING_BASE}/generate`,
   },
 
   // Debug endpoints

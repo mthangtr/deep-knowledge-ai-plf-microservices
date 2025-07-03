@@ -298,12 +298,21 @@ class LearningService {
     }
   }
 
-  // Alias method for compatibility with useLearningChat
+  // Lấy messages cho một session, không cần topic_id/node_id nữa
   async getLearningChats(
-    topicId: string,
-    nodeId?: string
+    sessionId: string
   ): Promise<ApiResponse<LearningChat[]>> {
-    return this.getChats(topicId, nodeId);
+    try {
+      const response = await fetch(
+        `${API_ENDPOINTS.chat.messages(sessionId)}`,
+        {
+          headers: await this.getHeaders(),
+        }
+      );
+      return await response.json();
+    } catch (error) {
+      return { error: "Lỗi kết nối mạng" };
+    }
   }
 
   // New AI chat method using the updated endpoint
@@ -359,92 +368,16 @@ class LearningService {
 
   async sendChatMessage(message: {
     topic_id: string;
-    node_id?: string; // Optional - null for topic-level chat
+    node_id?: string;
     message: string;
     is_ai_response?: boolean;
     message_type?: "normal" | "auto_prompt" | "system";
   }): Promise<ApiResponse<LearningChat>> {
     try {
-      const response = await fetch(API_ENDPOINTS.chat.messages, {
+      const response = await fetch(`${API_ENDPOINTS.chat.base}/messages`, {
         method: "POST",
         headers: await this.getHeaders(),
         body: JSON.stringify(message),
-      });
-      return await response.json();
-    } catch (error) {
-      return { error: "Lỗi kết nối mạng" };
-    }
-  }
-
-  async deleteTopicChats(
-    topicId: string
-  ): Promise<ApiResponse<{ success: boolean }>> {
-    try {
-      const response = await fetch(
-        `${API_ENDPOINTS.chat.messages}?topic_id=${topicId}&node_id=null`,
-        {
-          method: "DELETE",
-          headers: await this.getHeaders(),
-        }
-      );
-      return await response.json();
-    } catch (error) {
-      return { error: "Lỗi kết nối mạng" };
-    }
-  }
-
-  async deleteNodeChats(
-    nodeId: string
-  ): Promise<ApiResponse<{ success: boolean }>> {
-    try {
-      const response = await fetch(
-        `${API_ENDPOINTS.chat.messages}?node_id=${nodeId}`,
-        {
-          method: "DELETE",
-          headers: await this.getHeaders(),
-        }
-      );
-      return await response.json();
-    } catch (error) {
-      return { error: "Lỗi kết nối mạng" };
-    }
-  }
-
-  // Auto prompt API - Updated for topic-level
-  async createTopicAutoPrompt(topicData: {
-    topic_id: string;
-    topic_title: string;
-    topic_description: string;
-  }): Promise<AutoPromptResponse> {
-    try {
-      const response = await fetch(API_ENDPOINTS.chat.autoPrompt, {
-        method: "POST",
-        headers: await this.getHeaders(),
-        body: JSON.stringify({
-          ...topicData,
-          type: "topic",
-        }),
-      });
-      return await response.json();
-    } catch (error) {
-      return { error: "Lỗi kết nối mạng" };
-    }
-  }
-
-  async createNodeAutoPrompt(nodeData: {
-    topic_id: string;
-    node_id: string;
-    node_title: string;
-    node_description: string;
-  }): Promise<AutoPromptResponse> {
-    try {
-      const response = await fetch(API_ENDPOINTS.chat.autoPrompt, {
-        method: "POST",
-        headers: await this.getHeaders(),
-        body: JSON.stringify({
-          ...nodeData,
-          type: "node",
-        }),
       });
       return await response.json();
     } catch (error) {
@@ -482,15 +415,17 @@ class LearningService {
     }
   }
 
-  // New method for getting notes with just node_id
+  // Lấy notes cho một node cụ thể
   async getNotes(nodeId: string): Promise<ApiResponse<LearningNote[]>> {
     try {
-      const params = new URLSearchParams();
-      params.append("node_id", nodeId);
-
-      const response = await fetch(`${API_ENDPOINTS.notes.list}?${params}`, {
-        headers: await this.getHeaders(),
-      });
+      // Chỉ gửi node_id, không gửi topic_id
+      const params = new URLSearchParams({ node_id: nodeId });
+      const response = await fetch(
+        `${API_ENDPOINTS.notes.list}?${params.toString()}`,
+        {
+          headers: await this.getHeaders(),
+        }
+      );
       return await response.json();
     } catch (error) {
       return { error: "Lỗi kết nối mạng" };
@@ -535,67 +470,6 @@ class LearningService {
         method: "DELETE",
         headers: await this.getHeaders(),
       });
-      return await response.json();
-    } catch (error) {
-      return { error: "Lỗi kết nối mạng" };
-    }
-  }
-
-  // AI Agent Chat Methods (New)
-  async chatWithAI(params: {
-    topic_id: string;
-    node_id?: string;
-    message: string;
-    context_window?: number;
-    model?: string;
-    temperature?: number;
-    max_tokens?: number;
-  }): Promise<ApiResponse<{ response: string; context: any }>> {
-    try {
-      const response = await fetch(API_ENDPOINTS.chat.langchain, {
-        method: "POST",
-        headers: await this.getHeaders(),
-        body: JSON.stringify(params),
-      });
-      return await response.json();
-    } catch (error) {
-      return { error: "Lỗi kết nối mạng" };
-    }
-  }
-
-  async generateChatSummary(params: {
-    topic_id: string;
-    node_id?: string;
-  }): Promise<ApiResponse<{ summary: string }>> {
-    try {
-      const response = await fetch(API_ENDPOINTS.chat.langchainSummary, {
-        method: "POST",
-        headers: await this.getHeaders(),
-        body: JSON.stringify(params),
-      });
-      return await response.json();
-    } catch (error) {
-      return { error: "Lỗi kết nối mạng" };
-    }
-  }
-
-  async getChatContext(params: {
-    topic_id: string;
-    node_id?: string;
-  }): Promise<ApiResponse<any>> {
-    try {
-      const queryParams = new URLSearchParams();
-      queryParams.append("topic_id", params.topic_id);
-      if (params.node_id) {
-        queryParams.append("node_id", params.node_id);
-      }
-
-      const response = await fetch(
-        `${API_ENDPOINTS.chat.context}?${queryParams}`,
-        {
-          headers: await this.getHeaders(),
-        }
-      );
       return await response.json();
     } catch (error) {
       return { error: "Lỗi kết nối mạng" };

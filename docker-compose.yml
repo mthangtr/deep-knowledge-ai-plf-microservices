@@ -33,6 +33,7 @@ services:
       JWT_SECRET: kNFNj0uQCVzdBoVKAbAKUUTf0JPtYqlD
       SUPABASE_URL: https://jkykheapwyozbztnntph.supabase.co
       SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpreWtoZWFwd3lvemJ6dG5udHBoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA2NzI4NDksImV4cCI6MjA2NjI0ODg0OX0.uikqgQ3dhqEAArc92eoXQXpYEl18-POUsgkIzLmo0z0
+      SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpreWtoZWFwd3lvemJ6dG5udHBoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MDY3Mjg0OSwiZXhwIjoyMDY2MjQ4ODQ5fQ.TdKaQaagqE5kQTQrXk4NQ4xHaSFDRf6ufjUpUoc22uo
       LANGCHAIN_SERVICE_URL: http://langchain-python:5000
       FLOWISE_API_URL: https://cloud.flowiseai.com/api/v1/prediction/3e25445a-0652-45de-8ad6-8e1c78740a8c
       FLOWISE_API_KEY: YQT-c-WYOGuUiRY7YqK5xAgoGvGnVlzKACW1dJEapS4

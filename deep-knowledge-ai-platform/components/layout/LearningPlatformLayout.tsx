@@ -13,6 +13,7 @@ import { LearningTopic as UILearningTopic, MindMapNodeData } from '@/types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { AlertCircle, BookOpen } from 'lucide-react';
+import { MindMapModal } from '../learning/MindMapModal';
 import {
     ResizableHandle,
     ResizablePanel,
@@ -52,7 +53,7 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
         error: notesError,
         createNote,
         clearError: clearNotesError
-    } = useLearningNotes(selectedNodeForChat?.id || selectedTopic?.id);
+    } = useLearningNotes(selectedNodeForChat?.id);
 
     // Format topics for sidebar
     const formattedTopics = topics.map(topic => ({
@@ -114,7 +115,10 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
     };
 
     const handleAddToNotes = async (content: string) => {
-        if (!selectedTopic) return;
+        if (!selectedNodeForChat) {
+            console.warn("Cannot add note: No node selected.");
+            return;
+        }
         await createNote({ content });
     };
 
@@ -229,7 +233,7 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
                             <ResizableHandle withHandle />
                             <ResizablePanel defaultSize={35} minSize={20}>
                                 <NotesPanel
-                                    notes={notes as LearningNote[]}
+                                    notes={notes}
                                     selectedTopic={{
                                         id: selectedNodeForChat?.id || selectedTopic.id,
                                         title: selectedNodeForChat?.title || selectedTopic.title,
@@ -246,6 +250,15 @@ export function LearningPlatformLayout({ children }: LearningPlatformLayoutProps
                     )}
                 </ResizablePanelGroup>
             </div>
+
+            <MindMapModal
+                isOpen={showMindMap}
+                onClose={() => setShowMindMap(false)}
+                data={mindMapData}
+                topicTitle={selectedTopic?.title || ''}
+                onNodeSelect={handleNodeSelect}
+            />
+
             {children}
         </div>
     );

@@ -1,14 +1,20 @@
 import { Router } from "express";
-import { supabase } from "../config/supabase";
+import { supabaseAdmin } from "../config/supabase";
 import { authenticate } from "../middleware/auth.middleware";
 import { AuthRequest } from "../types";
-import { validateTopicOwnership } from "../utils/auth.utils";
+import {
+  validateTopicOwnership,
+  validateSessionOwnership,
+} from "../utils/auth.utils";
 
 const router = Router();
 
 // Helper function to verify that the user owns the session
 const verifySessionOwnership = async (sessionId: string, userId: string) => {
-  const { data, error } = await supabase
+  if (!supabaseAdmin) {
+    throw new Error("Supabase admin client not initialized");
+  }
+  const { data, error } = await supabaseAdmin
     .from("chat_sessions")
     .select("id")
     .eq("id", sessionId)
@@ -17,9 +23,68 @@ const verifySessionOwnership = async (sessionId: string, userId: string) => {
   return !error && !!data;
 };
 
+// GET /api/learning/chat - Lấy danh sách tin nhắn chat
+router.get("/", authenticate, async (req: AuthRequest, res) => {
+  try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
+    const userId = req.user!.id;
+    const { topic_id, node_id } = req.query;
+
+    if (!topic_id || typeof topic_id !== "string") {
+      return res.status(400).json({ error: "Yêu cầu phải có topic_id" });
+    }
+
+    // 1. Find the session first
+    let sessionQuery = supabaseAdmin
+      .from("chat_sessions")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("topic_id", topic_id);
+
+    if (node_id && typeof node_id === "string") {
+      sessionQuery = sessionQuery.eq("node_id", node_id);
+    } else {
+      sessionQuery = sessionQuery.is("node_id", null);
+    }
+
+    const { data: sessionData, error: sessionError } =
+      await sessionQuery.single();
+
+    if (sessionError || !sessionData) {
+      // If no session, it means no chat history, return empty array
+      return res.json({ data: [] });
+    }
+
+    const sessionId = sessionData.id;
+
+    // 2. Fetch messages using the session_id
+    const { data, error } = await supabaseAdmin
+      .from("chat_messages")
+      .select("*")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      return res
+        .status(500)
+        .json({ error: "Không thể lấy tin nhắn chat", details: error.message });
+    }
+
+    return res.json({ data: data || [] });
+  } catch (error) {
+    console.error("Lỗi server trong GET /chat:", error);
+    return res.status(500).json({ error: "Lỗi server nội bộ" });
+  }
+});
+
 // POST /api/learning/chat/session - Get or create a chat session
 router.post("/session", authenticate, async (req: AuthRequest, res) => {
   try {
+    if (!supabaseAdmin) {
+      throw new Error("Supabase admin client not initialized");
+    }
     const userId = req.user!.id;
     const { topic_id, node_id } = req.body;
 
@@ -35,7 +100,7 @@ router.post("/session", authenticate, async (req: AuthRequest, res) => {
     }
 
     // Check for an existing session
-    let query = supabase
+    let query = supabaseAdmin
       .from("chat_sessions")
       .select("*")
       .eq("user_id", userId)
@@ -69,7 +134,7 @@ router.post("/session", authenticate, async (req: AuthRequest, res) => {
       node_id: node_id || null,
     };
 
-    const { data: createdSession, error: createError } = await supabase
+    const { data: createdSession, error: createError } = await supabaseAdmin
       .from("chat_sessions")
       .insert(newSession)
       .select()
@@ -96,33 +161,39 @@ router.get(
   authenticate,
   async (req: AuthRequest, res) => {
     try {
+      if (!supabaseAdmin) {
+        throw new Error("Supabase admin client not initialized");
+      }
       const userId = req.user!.id;
       const { sessionId } = req.params;
 
-      const isOwner = await verifySessionOwnership(sessionId, userId);
-      if (!isOwner) {
+      // KIỂM TRA QUYỀN SỞ HỮU SESSION
+      const hasAccess = await validateSessionOwnership(sessionId, userId);
+      if (!hasAccess) {
         return res
           .status(403)
           .json({ error: "Bạn không có quyền truy cập session này" });
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from("chat_messages")
         .select("*")
         .eq("session_id", sessionId)
         .order("created_at", { ascending: true });
 
       if (error) {
-        console.error("Error fetching messages:", error);
         return res.status(500).json({
-          error: "Không thể lấy tin nhắn",
+          error: "Không thể lấy tin nhắn chat",
           details: error.message,
         });
       }
 
       return res.json({ data: data || [] });
     } catch (error) {
-      console.error("Server error in /messages:", error);
+      console.error(
+        "Lỗi server trong GET /chat/sessions/:sessionId/messages:",
+        error
+      );
       return res.status(500).json({ error: "Lỗi server nội bộ" });
     }
   }
@@ -134,6 +205,9 @@ router.post(
   authenticate,
   async (req: AuthRequest, res) => {
     try {
+      if (!supabaseAdmin) {
+        throw new Error("Supabase admin client not initialized");
+      }
       const userId = req.user!.id;
       const { sessionId } = req.params;
       const { message, topic_id, node_id } = req.body; // topic_id, node_id are for langchain context
@@ -150,15 +224,16 @@ router.post(
       }
 
       // 1. Save user message
-      const { data: savedUserMessage, error: userMessageError } = await supabase
-        .from("chat_messages")
-        .insert({
-          session_id: sessionId,
-          role: "user",
-          content: message.trim(),
-        })
-        .select()
-        .single();
+      const { data: savedUserMessage, error: userMessageError } =
+        await supabaseAdmin
+          .from("chat_messages")
+          .insert({
+            session_id: sessionId,
+            role: "user",
+            content: message.trim(),
+          })
+          .select()
+          .single();
 
       if (userMessageError) {
         console.error("Error saving user message:", userMessageError);
@@ -239,7 +314,7 @@ router.post(
 
       // 4. Save the full AI response
       if (fullAiResponse) {
-        await supabase.from("chat_messages").insert({
+        await supabaseAdmin.from("chat_messages").insert({
           session_id: sessionId,
           role: "assistant",
           content: fullAiResponse,
@@ -247,7 +322,7 @@ router.post(
       }
 
       // 5. Update session's last activity timestamp
-      await supabase
+      await supabaseAdmin
         .from("chat_sessions")
         .update({ last_activity: new Date().toISOString() })
         .eq("id", sessionId);

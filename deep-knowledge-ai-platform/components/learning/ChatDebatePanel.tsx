@@ -35,27 +35,20 @@ interface ChatDebatePanelProps {
 const FormattedAIResponse = React.memo(({ content }: { content: string }) => {
     const parts = useMemo(() => {
         if (!content) return [];
-
         const mermaidRegex = /```mermaid\n([\s\S]*?)```/g;
         const result: { type: 'markdown' | 'mermaid'; value: string }[] = [];
         let lastIndex = 0;
         let match;
-
         while ((match = mermaidRegex.exec(content)) !== null) {
-            // Add the text before the mermaid block
             if (match.index > lastIndex) {
                 result.push({ type: 'markdown', value: content.substring(lastIndex, match.index) });
             }
-            // Add the mermaid block
             result.push({ type: 'mermaid', value: match[1] });
             lastIndex = match.index + match[0].length;
         }
-
-        // Add any remaining text after the last mermaid block
         if (lastIndex < content.length) {
             result.push({ type: 'markdown', value: content.substring(lastIndex) });
         }
-
         return result;
     }, [content]);
 
@@ -111,36 +104,28 @@ const FormattedAIResponse = React.memo(({ content }: { content: string }) => {
     if (parts.length === 0) {
         return (
             <div className="font-inter text-foreground antialiased prose prose-sm dark:prose-invert max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                    {content}
-                </ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{content}</ReactMarkdown>
             </div>
         );
     }
 
     return (
         <div className="font-inter text-foreground antialiased prose prose-sm dark:prose-invert max-w-none">
-            {parts.map((part, index) => {
-                if (part.type === 'mermaid') {
-                    return <MermaidDiagram key={index} chart={part.value} />;
-                }
-                return (
-                    <ReactMarkdown
-                        key={index}
-                        remarkPlugins={[remarkGfm]}
-                        components={markdownComponents}
-                    >
+            {parts.map((part, index) =>
+                part.type === 'mermaid' ? (
+                    <MermaidDiagram key={index} chart={part.value} />
+                ) : (
+                    <ReactMarkdown key={index} remarkPlugins={[remarkGfm]} components={markdownComponents}>
                         {part.value}
                     </ReactMarkdown>
-                );
-            })}
+                )
+            )}
         </div>
     );
 });
-
 FormattedAIResponse.displayName = 'FormattedAIResponse';
 
-// Memoized Message Component
+// Memoized Message Component - Merged UI from old version with logic from new version
 const MessageItem = React.memo(({
     message,
     onAddToNotes,
@@ -158,56 +143,46 @@ const MessageItem = React.memo(({
     }, []);
 
     return (
-        <div
-            className={cn(
-                "flex gap-4 group",
-                message.role === 'user' ? 'justify-end' : 'justify-start'
-            )}
-        >
+        <div className={cn("flex gap-4 group", message.role === 'user' ? 'justify-end' : 'justify-start')}>
+            {/* AI Avatar */}
             {message.role === 'assistant' && (
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center flex-shrink-0 mt-1">
                     <GraduationCap className="h-4 w-4 text-primary-foreground" />
                 </div>
             )}
-            <div className={cn(
-                "flex flex-col max-w-[85%] sm:max-w-[70%]",
-                message.role === 'user' ? 'items-end' : 'items-start'
-            )}>
-                <div className={cn(
-                    "rounded-2xl px-4 py-3 shadow-sm",
-                    message.role === 'user' ? 'bg-primary text-primary-foreground rounded-br-md' : ''
-                )}>
-                    <FormattedAIResponse content={message.content} />
-                </div>
-                <div className={cn(
-                    "flex items-center gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200",
-                    message.role === 'user' ? 'flex-row-reverse' : 'flex-row'
-                )}>
+
+            {/* Message Content */}
+            <div className={cn("flex flex-col max-w-[85%] sm:max-w-[70%]", message.role === 'user' ? 'items-end' : 'items-start')}>
+                {/* Message Bubble */}
+                {message.role === 'user' ? (
+                    <div className="bg-primary text-primary-foreground rounded-2xl rounded-br-md px-4 py-3 shadow-sm">
+                        <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.content}</div>
+                    </div>
+                ) : (
+                    <div className="w-full space-y-3">
+                        <FormattedAIResponse content={message.content} />
+                    </div>
+                )}
+
+                {/* Message Meta & Actions */}
+                <div className={cn("flex items-center gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200", message.role === 'user' ? 'flex-row-reverse' : 'flex-row')}>
                     <span className="text-xs text-muted-foreground">
                         {formatTime(message.created_at)}
                     </span>
                     <div className="flex items-center gap-1">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                            onClick={() => onCopyMessage(message.content)}
-                        >
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground" onClick={() => onCopyMessage(message.content)}>
                             <Copy className="h-3 w-3" />
                         </Button>
                         {message.role === 'assistant' && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                                onClick={() => onAddToNotes(message.id, message.content)}
-                            >
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground" onClick={() => onAddToNotes(message.id, message.content)}>
                                 <BookmarkPlus className="h-3 w-3" />
                             </Button>
                         )}
                     </div>
                 </div>
             </div>
+
+            {/* User Avatar */}
             {message.role === 'user' && (
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-muted to-muted/80 flex items-center justify-center flex-shrink-0 mt-1">
                     <User className="h-4 w-4 text-muted-foreground" />
@@ -227,6 +202,7 @@ export function ChatDebatePanel({
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     const { sendMessageStream, isStreaming } = useAIChatStream();
 
@@ -240,11 +216,17 @@ export function ChatDebatePanel({
             };
 
             setIsLoading(true);
-            const response = await learningService.getLearningChats(sessionId);
-            if (response.data) {
-                setMessages(response.data as any);
+            try {
+                const response = await learningService.getLearningChats(sessionId);
+                if (response.data) {
+                    setMessages(response.data as any);
+                }
+            } catch (error) {
+                console.error("Failed to fetch messages:", error);
+                setMessages([]);
+            } finally {
+                setIsLoading(false);
             }
-            setIsLoading(false);
         };
         fetchMessages();
     }, [sessionId]);
@@ -269,7 +251,6 @@ export function ChatDebatePanel({
         const messageContent = inputValue.trim();
         setInputValue('');
 
-        // Optimistic update for user message
         const tempUserMessage: ChatMessage = {
             id: `temp-user-${Date.now()}`,
             session_id: sessionId,
@@ -280,10 +261,10 @@ export function ChatDebatePanel({
         setMessages(prev => [...prev, tempUserMessage]);
 
         await sendMessageStream(messageContent, selectedTopic.id, selectedNode?.id, {
-            onUserMessage: (realUserMessage: ChatMessage) => {
+            onUserMessage: (realUserMessage) => {
                 setMessages(prev => prev.map(m => m.id === tempUserMessage.id ? realUserMessage : m));
             },
-            onChunk: (content: string, fullContent: string) => {
+            onChunk: (content, fullContent) => {
                 setMessages(prev => {
                     const existingAiMessage = prev.find(m => m.id.startsWith('temp-ai-'));
                     if (existingAiMessage) {
@@ -300,10 +281,10 @@ export function ChatDebatePanel({
                     }
                 });
             },
-            onComplete: (data: { ai_message: ChatMessage; session_id: string }) => {
+            onComplete: (data) => {
                 setMessages(prev => prev.map(m => m.id.startsWith('temp-ai-') ? data.ai_message : m));
             },
-            onError: (error: string) => {
+            onError: (error) => {
                 console.error("Streaming error:", error);
                 setMessages(prev => prev.filter(m => m.id !== tempUserMessage.id && !m.id.startsWith('temp-ai-')));
             }
@@ -316,12 +297,8 @@ export function ChatDebatePanel({
             <div className="h-full flex items-center justify-center bg-gradient-to-br from-muted/30 to-background">
                 <div className="text-center p-8">
                     <MessageSquare className="h-16 w-16 text-muted-foreground/50 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-muted-foreground mb-2">
-                        Chọn chủ đề để bắt đầu thảo luận
-                    </h3>
-                    <p className="text-sm text-muted-foreground max-w-sm">
-                        Hãy chọn một chủ đề từ danh sách bên trái để bắt đầu cuộc hội thoại với AI Mentor.
-                    </p>
+                    <h3 className="text-lg font-medium text-muted-foreground mb-2">Chọn chủ đề để bắt đầu thảo luận</h3>
+                    <p className="text-sm text-muted-foreground max-w-sm">Hãy chọn một chủ đề từ danh sách bên trái để bắt đầu cuộc hội thoại với AI Mentor.</p>
                 </div>
             </div>
         );
@@ -329,30 +306,25 @@ export function ChatDebatePanel({
 
     return (
         <div className="flex flex-col h-full bg-background">
-            {/* Header - Clean minimal design */}
             <div className="flex items-center gap-3 p-6 bg-background/80 backdrop-blur-sm">
                 <div className="flex-1 min-w-0">
                     <h2 className="text-lg font-medium text-foreground truncate">{selectedNode?.title || selectedTopic.title}</h2>
-                    <p className="text-sm text-muted-foreground">
-                        AI Mentor • {messages.length} tin nhắn
-                        {selectedNode && ` • Node: ${selectedNode.title}`}
-                    </p>
+                    <p className="text-sm text-muted-foreground">AI Mentor • {messages.length} tin nhắn</p>
                 </div>
             </div>
 
-            {/* Messages Area - Clean, spacious */}
             <ScrollArea ref={scrollAreaRef} className="flex-1">
                 <div className="px-4 py-6 space-y-8 max-w-4xl mx-auto">
-                    {messages.length === 0 ? (
+                    {isLoading ? (
+                        <div className="text-center py-12 text-muted-foreground">Đang tải tin nhắn...</div>
+                    ) : messages.length === 0 ? (
                         <div className="text-center py-12">
                             <div className="bg-gradient-to-br from-muted/50 to-background rounded-2xl p-8 mx-auto max-w-md">
                                 <div className="w-12 h-12 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center">
                                     <GraduationCap className="h-6 w-6 text-primary" />
                                 </div>
                                 <h3 className="font-medium mb-3 text-foreground">Bắt đầu cuộc đối thoại</h3>
-                                <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-                                    Đặt câu hỏi về "{selectedTopic.title}" để AI Mentor thách thức suy nghĩ của bạn
-                                </p>
+                                <p className="text-sm text-muted-foreground mb-6 leading-relaxed">Đặt câu hỏi về "{selectedTopic.title}" để AI Mentor thách thức suy nghĩ của bạn</p>
                             </div>
                         </div>
                     ) : (
@@ -365,8 +337,6 @@ export function ChatDebatePanel({
                             />
                         ))
                     )}
-
-                    {/* Typing Indicator - Modern style */}
                     {isStreaming && (
                         <div className="flex gap-4">
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center flex-shrink-0">
@@ -384,16 +354,16 @@ export function ChatDebatePanel({
                 </div>
             </ScrollArea>
 
-            {/* Input Area - Modern, minimal */}
             <div className="p-4 bg-background/80 backdrop-blur-sm">
                 <div className="max-w-4xl mx-auto">
                     <form onSubmit={handleSubmit} className="flex gap-3 items-end">
                         <div className="flex-1 relative">
                             <Input
+                                ref={inputRef}
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
                                 placeholder="Gửi tin nhắn..."
-                                className="rounded-2xl bg-muted/50 border-0 flex-1"
+                                className="rounded-2xl bg-muted/50 border-0 focus:ring-2 focus:ring-primary/20 focus:bg-background pr-12 py-3 text-sm resize-none min-h-[44px]"
                                 disabled={isStreaming}
                             />
                         </div>
@@ -406,9 +376,7 @@ export function ChatDebatePanel({
                             <Send className="h-4 w-4" />
                         </Button>
                     </form>
-                    <p className="text-xs text-muted-foreground mt-2 text-center">
-                        AI Mentor có thể mắc lỗi. Hãy kiểm tra thông tin quan trọng.
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-2 text-center">AI Mentor có thể mắc lỗi. Hãy kiểm tra thông tin quan trọng.</p>
                 </div>
             </div>
         </div>

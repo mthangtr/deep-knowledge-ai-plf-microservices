@@ -56,6 +56,7 @@ CREATE TABLE "public"."learning_topics" (
     "user_id" uuid NOT NULL REFERENCES "public"."user_profiles" ON DELETE CASCADE,
     "title" text NOT NULL,
     "description" text,
+    "is_active" boolean DEFAULT true,
     "created_at" timestamp with time zone DEFAULT now(),
     "updated_at" timestamp with time zone DEFAULT now()
 );
@@ -152,6 +153,15 @@ ON CONFLICT (id) DO NOTHING;
 -- =============================================
 SELECT 'Final MVP Database schema created successfully with default plans.' as status;
 
+-- =============================================
+-- === Triggers and Functions (Cleanup)      ===
+-- =============================================
+
+-- The old trigger is no longer needed as profile creation is now handled by the backend.
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP FUNCTION IF EXISTS public.handle_new_user();
+
+-- Trigger to automatically update the `updated_at` column
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN

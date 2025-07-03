@@ -10,7 +10,7 @@ interface UseLearningNotesState {
   currentNodeId: string | null;
 }
 
-export function useLearningNotes(nodeId?: string) {
+export function useLearningNotes(topicId?: string, nodeId?: string) {
   const [state, setState] = useState<UseLearningNotesState>({
     notes: [],
     loading: false,
@@ -21,12 +21,12 @@ export function useLearningNotes(nodeId?: string) {
 
   // Fetch notes based on current node
   const fetchNotes = useCallback(async () => {
-    if (!nodeId) return;
+    if (!topicId) return;
 
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
-      const response = await learningService.getNotes(nodeId);
+      const response = await learningService.getNotes(topicId, nodeId);
 
       if (response.error) {
         setState((prev) => ({
@@ -42,7 +42,7 @@ export function useLearningNotes(nodeId?: string) {
         notes: response.data || [],
         loading: false,
         error: null,
-        currentNodeId: nodeId,
+        currentNodeId: nodeId || null,
       }));
     } catch (error) {
       setState((prev) => ({
@@ -51,17 +51,18 @@ export function useLearningNotes(nodeId?: string) {
         error: "Lỗi kết nối khi tải notes",
       }));
     }
-  }, [nodeId]);
+  }, [topicId, nodeId]);
 
   // Create note
   const createNote = useCallback(
     async (noteData: { content: string }) => {
-      if (!nodeId) return null;
+      if (!topicId) return null;
 
       setState((prev) => ({ ...prev, saving: true, error: null }));
 
       try {
         const response = await learningService.createNote({
+          topic_id: topicId,
           node_id: nodeId,
           content: noteData.content,
         });
@@ -95,7 +96,7 @@ export function useLearningNotes(nodeId?: string) {
         return null;
       }
     },
-    [nodeId]
+    [topicId, nodeId]
   );
 
   // Update note
@@ -178,7 +179,7 @@ export function useLearningNotes(nodeId?: string) {
 
   // Load notes when parameters change
   useEffect(() => {
-    if (nodeId) {
+    if (topicId) {
       fetchNotes();
     } else {
       // Reset state when no valid parameters
@@ -188,7 +189,7 @@ export function useLearningNotes(nodeId?: string) {
         currentNodeId: null,
       }));
     }
-  }, [fetchNotes, nodeId]);
+  }, [fetchNotes, topicId]);
 
   return {
     // State
