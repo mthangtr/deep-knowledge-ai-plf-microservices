@@ -23,23 +23,12 @@ export const API_ENDPOINTS = {
 
   // Chat endpoints
   chat: {
-    messages: `${API_GATEWAY_URL}/api/learning/chat`,
-    autoPrompt: `${API_GATEWAY_URL}/api/learning/chat/auto-prompt`,
-    ai: `${API_GATEWAY_URL}/api/learning/chat/ai`, // New AI chat endpoint
-    aiStream: `${API_GATEWAY_URL}/api/learning/chat/ai-stream`, // Streaming AI chat endpoint
-    session: `${API_GATEWAY_URL}/api/learning/chat/session`,
-    sessions: `${API_GATEWAY_URL}/api/learning/chat/sessions`,
-
-    // AI Agent Chat endpoints (routed to different service)
-    context: `${API_GATEWAY_URL}/api/learning/chat/context`,
-    contextMessage: `${API_GATEWAY_URL}/api/learning/chat/context/message`,
-    contextSummary: `${API_GATEWAY_URL}/api/learning/chat/context/summary`,
-
-    langchain: `${API_GATEWAY_URL}/api/learning/chat/langchain`,
-    langchainSummary: `${API_GATEWAY_URL}/api/learning/chat/langchain/generate-summary`,
-    langchainAnalyze: `${API_GATEWAY_URL}/api/learning/chat/langchain/analyze-progress`,
-    langchainCustom: `${API_GATEWAY_URL}/api/learning/chat/langchain/custom-prompt`,
-    langchainModels: `${API_GATEWAY_URL}/api/learning/chat/langchain/models`,
+    base: `${API_GATEWAY_URL}/api/learning/chat`,
+    session: () => `${API_ENDPOINTS.chat.base}/session`,
+    messages: (sessionId: string) =>
+      `${API_ENDPOINTS.chat.base}/sessions/${sessionId}/messages`,
+    stream: (sessionId: string) =>
+      `${API_ENDPOINTS.chat.base}/sessions/${sessionId}/stream`,
   },
 
   // Notes endpoints

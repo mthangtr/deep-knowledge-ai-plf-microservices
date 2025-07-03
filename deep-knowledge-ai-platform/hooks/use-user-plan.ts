@@ -154,13 +154,25 @@ export function useUserPlan() {
         `
         )
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
-      if (userError) {
+      // Nếu user profile chưa tồn tại, trả về free plan
+      if (userError && userError.code !== "PGRST116") {
         throw userError;
       }
 
-      const currentPlan = userProfile?.plan || null;
+      // Nếu không có profile hoặc plan, dùng free plan mặc định
+      const currentPlan = userProfile?.plan || {
+        id: "free",
+        name: "free",
+        price: 0,
+        features: [
+          "Basic AI model",
+          "Up to 3 learning topics",
+          "Standard support",
+        ],
+        is_active: true,
+      };
 
       // Cache plan sau khi fetch thành công
       setPlanToCache(user.id, currentPlan);
@@ -193,7 +205,6 @@ export function useUserPlan() {
       const { data, error } = await supabase
         .from("plans")
         .select("*")
-        .eq("is_active", true)
         .order("price", { ascending: true });
 
       if (error) throw error;

@@ -70,30 +70,30 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
 
     // Prepare tree nodes with real UUIDs and relationships
     const nodes = treeData.tree.map((node: any) => {
-      const realId = tempIdMap.get(node.temp_id) || randomUUID();
-      const parentId = node.parent_id
-        ? tempIdMap.get(node.parent_id) || null
-        : null;
+      const tempId = node.temp_id || node.id;
+      const realId = tempIdMap.get(tempId) || randomUUID();
+
+      // Resolve requires/next from temp_id to real UUID
       const resolvedRequires = (node.requires || [])
-        .map((reqId: string) => tempIdMap.get(reqId))
-        .filter(Boolean);
+        .map((reqTempId: string) => tempIdMap.get(reqTempId))
+        .filter(Boolean); // Filter out any unresolved IDs
+
       const resolvedNext = (node.next || [])
-        .map((nextId: string) => tempIdMap.get(nextId))
-        .filter(Boolean);
+        .map((nextTempId: string) => tempIdMap.get(nextTempId))
+        .filter(Boolean); // Filter out any unresolved IDs
 
       return {
         id: realId,
         topic_id: createdTopic.id,
-        parent_id: parentId,
         title: node.title,
         description: node.description,
         prompt_sample: node.prompt_sample || null,
+        is_chat_enabled: node.is_chat_enabled !== false,
         requires: resolvedRequires,
         next: resolvedNext,
         level: node.level || 0,
         position_x: node.position_x || 0,
         position_y: node.position_y || 0,
-        is_completed: false,
       };
     });
 

@@ -14,8 +14,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Table for defining subscription plans.
 CREATE TABLE "public"."plans" (
-    "id" serial PRIMARY KEY,
-    "name" text NOT NULL UNIQUE,
+    "id" text PRIMARY KEY,
+    "name" text NOT NULL,
     "price" numeric(10, 2) DEFAULT 0.00,
     "features" jsonb
 );
@@ -27,10 +27,11 @@ CREATE TABLE "public"."user_profiles" (
     "email" text UNIQUE,
     "full_name" text,
     "avatar_url" text,
-    "plan_id" integer REFERENCES "public"."plans"(id),
+    "plan_id" text REFERENCES "public"."plans"(id) DEFAULT 'free',
     "plan_status" text DEFAULT 'active',
     "plan_started_at" timestamp with time zone DEFAULT now(),
     "plan_expires_at" timestamp with time zone,
+    "last_login_at" timestamp with time zone,
     "updated_at" timestamp with time zone DEFAULT now()
 );
 ALTER TABLE "public"."user_profiles" ENABLE ROW LEVEL SECURITY;
@@ -39,7 +40,7 @@ ALTER TABLE "public"."user_profiles" ENABLE ROW LEVEL SECURITY;
 CREATE TABLE "public"."user_plan_history" (
     "id" bigserial PRIMARY KEY,
     "user_id" uuid NOT NULL REFERENCES "public"."user_profiles" ON DELETE CASCADE,
-    "plan_id" integer NOT NULL REFERENCES "public"."plans" ON DELETE RESTRICT,
+    "plan_id" text NOT NULL REFERENCES "public"."plans"(id) ON DELETE RESTRICT,
     "start_date" timestamp with time zone DEFAULT now(),
     "end_date" timestamp with time zone
 );
@@ -55,7 +56,8 @@ CREATE TABLE "public"."learning_topics" (
     "user_id" uuid NOT NULL REFERENCES "public"."user_profiles" ON DELETE CASCADE,
     "title" text NOT NULL,
     "description" text,
-    "created_at" timestamp with time zone DEFAULT now()
+    "created_at" timestamp with time zone DEFAULT now(),
+    "updated_at" timestamp with time zone DEFAULT now()
 );
 ALTER TABLE "public"."learning_topics" ENABLE ROW LEVEL SECURITY;
 
@@ -73,7 +75,8 @@ CREATE TABLE "public"."tree_nodes" (
     "position_x" float DEFAULT 0,
     "position_y" float DEFAULT 0,
     "is_completed" boolean DEFAULT false,
-    "created_at" timestamp with time zone DEFAULT now()
+    "created_at" timestamp with time zone DEFAULT now(),
+    "updated_at" timestamp with time zone DEFAULT now()
 );
 ALTER TABLE "public"."tree_nodes" ENABLE ROW LEVEL SECURITY;
 
@@ -136,15 +139,38 @@ ALTER TABLE "public"."user_learning_progress" ENABLE ROW LEVEL SECURITY;
 -- Insert default plans.
 -- ON CONFLICT DO NOTHING ensures that if the script is run multiple times,
 -- it won't create duplicate plans or cause errors.
-INSERT INTO "public"."plans" (name, price, features) VALUES
-('free', 0.00, '["Basic AI model", "Up to 3 learning topics", "Standard support"]')
-ON CONFLICT (name) DO NOTHING;
+INSERT INTO "public"."plans" (id, name, price, features) VALUES
+('free', 'free', 0.00, '["Basic AI model", "Up to 3 learning topics", "Standard support"]')
+ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO "public"."plans" (name, price, features) VALUES
-('premium', 15.00, '["Advanced AI model", "Unlimited learning topics", "Priority support", "Vector search in chat"]')
-ON CONFLICT (name) DO NOTHING;
+INSERT INTO "public"."plans" (id, name, price, features) VALUES
+('premium', 'premium', 15.00, '["Advanced AI model", "Unlimited learning topics", "Priority support", "Vector search in chat"]')
+ON CONFLICT (id) DO NOTHING;
 
 -- =============================================
 -- === End of Schema Definition            ===
 -- =============================================
 SELECT 'Final MVP Database schema created successfully with default plans.' as status;
+
+CREATE OR REPLACE FUNCTION public.handle_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER on_learning_topics_update
+    BEFORE UPDATE ON public.learning_topics
+    FOR EACH ROW
+    EXECUTE PROCEDURE public.handle_updated_at();
+
+CREATE TRIGGER on_tree_nodes_update
+    BEFORE UPDATE ON public.tree_nodes
+    FOR EACH ROW
+    EXECUTE PROCEDURE public.handle_updated_at();
+
+CREATE TRIGGER on_learning_notes_update
+    BEFORE UPDATE ON public.learning_notes
+    FOR EACH ROW
+    EXECUTE PROCEDURE public.handle_updated_at();

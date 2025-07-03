@@ -46,3 +46,20 @@ export const validateTopicOwnership = async (
 
   return !error && data?.user_id === userId;
 };
+
+export const validateNodeOwnership = async (
+  nodeId: string,
+  userId: string
+): Promise<boolean> => {
+  const { data: node, error: nodeError } = await supabase
+    .from("tree_nodes")
+    .select("topic_id")
+    .eq("id", nodeId)
+    .single();
+
+  if (nodeError || !node) {
+    return false; // Node does not exist
+  }
+
+  return validateTopicOwnership(node.topic_id, userId);
+};

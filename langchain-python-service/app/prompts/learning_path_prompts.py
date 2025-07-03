@@ -114,9 +114,6 @@ Create a JSON array where each object represents a learning node with these exac
 - `prompt_sample`: If leaf node: "Giải thích chi tiết về [title]. Cung cấp ví dụ cụ thể và hướng dẫn thực hành.", else ""
 - `position_x`: 0
 - `position_y`: 0
-- `is_completed`: false
-- `created_at`: ""
-- `updated_at`: ""
 
 **CONVERSION RULES:**
 1. Parse each line to extract number and title
@@ -137,7 +134,7 @@ Input:
 1.1.1. Variables
 
 Output:
-[{"title":"Java Fundamentals","description":"Detailed explanation of Java Fundamentals","level":0,"temp_id":"1","requires":[],"next":["1.1"],"is_chat_enabled":false,"prompt_sample":"","position_x":0,"position_y":0,"is_completed":false,"created_at":"","updated_at":""},{"title":"Syntax Basics","description":"Detailed explanation of Syntax Basics","level":1,"temp_id":"1.1","requires":["1"],"next":["1.1.1"],"is_chat_enabled":false,"prompt_sample":"","position_x":0,"position_y":0,"is_completed":false,"created_at":"","updated_at":""},{"title":"Variables","description":"Detailed explanation of Variables","level":2,"temp_id":"1.1.1","requires":["1.1"],"next":[],"is_chat_enabled":true,"prompt_sample":"Giải thích chi tiết về Variables. Cung cấp ví dụ cụ thể và hướng dẫn thực hành.","position_x":0,"position_y":0,"is_completed":false,"created_at":"","updated_at":""}]
+[{"title":"Java Fundamentals","description":"Detailed explanation of Java Fundamentals","level":0,"temp_id":"1","requires":[],"next":["1.1"],"is_chat_enabled":false,"prompt_sample":"","position_x":0,"position_y":0},{"title":"Syntax Basics","description":"Detailed explanation of Syntax Basics","level":1,"temp_id":"1.1","requires":["1"],"next":["1.1.1"],"is_chat_enabled":false,"prompt_sample":"","position_x":0,"position_y":0},{"title":"Variables","description":"Detailed explanation of Variables","level":2,"temp_id":"1.1.1","requires":["1.1"],"next":[],"is_chat_enabled":true,"prompt_sample":"Giải thích chi tiết về Variables. Cung cấp ví dụ cụ thể và hướng dẫn thực hành.","position_x":0,"position_y":0}]
 """
 
 AGENT_C_METADATA_PROMPT = """
@@ -196,7 +193,7 @@ Each node object in the `tree` array must have these fields:
 - `next`: An array containing the `temp_id`s of all immediate children. Empty `[]` for leaf nodes.
 - `is_chat_enabled`: `true` ONLY for leaf nodes (nodes with no children), otherwise `false`.
 - `prompt_sample`: If `is_chat_enabled` is true, "Giải thích chi tiết về [title]. Cung cấp ví dụ cụ thể và hướng dẫn thực hành.", otherwise "".
-- `position_x`, `position_y`, `is_completed`, `created_at`, `updated_at` must be included with default values.
+- `position_x`, `position_y` must be included with default values.
 
 **CRITICAL BEHAVIORAL RULES:**
 - You MUST perform all calculations (parent/child relationships, levels) internally.

@@ -7,34 +7,26 @@ interface UseLearningNotesState {
   loading: boolean;
   saving: boolean;
   error: string | null;
-  currentNotesMode: "topic" | "node" | null;
-  currentTopicId: string | null;
   currentNodeId: string | null;
 }
 
-export function useLearningNotes(topicId?: string, nodeId?: string) {
+export function useLearningNotes(nodeId?: string) {
   const [state, setState] = useState<UseLearningNotesState>({
     notes: [],
     loading: false,
     saving: false,
     error: null,
-    currentNotesMode: null,
-    currentTopicId: null,
     currentNodeId: null,
   });
 
-  // Determine notes mode based on parameters
-  const notesMode = nodeId ? "node" : topicId ? "topic" : null;
-
-  // Fetch notes based on current mode
+  // Fetch notes based on current node
   const fetchNotes = useCallback(async () => {
-    if (!topicId) return;
+    if (!nodeId) return;
 
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
-      // Use new unified API method
-      const response = await learningService.getNotes(topicId, nodeId);
+      const response = await learningService.getNotes(nodeId);
 
       if (response.error) {
         setState((prev) => ({
@@ -50,9 +42,7 @@ export function useLearningNotes(topicId?: string, nodeId?: string) {
         notes: response.data || [],
         loading: false,
         error: null,
-        currentNotesMode: notesMode,
-        currentTopicId: topicId,
-        currentNodeId: nodeId || null,
+        currentNodeId: nodeId,
       }));
     } catch (error) {
       setState((prev) => ({
@@ -61,26 +51,19 @@ export function useLearningNotes(topicId?: string, nodeId?: string) {
         error: "Lỗi kết nối khi tải notes",
       }));
     }
-  }, [topicId, nodeId, notesMode]);
+  }, [nodeId]);
 
   // Create note
   const createNote = useCallback(
-    async (noteData: {
-      content: string;
-      note_type?: "manual" | "extracted_from_chat" | "ai_summary";
-      source_chat_id?: string;
-    }) => {
-      if (!topicId) return null;
+    async (noteData: { content: string }) => {
+      if (!nodeId) return null;
 
       setState((prev) => ({ ...prev, saving: true, error: null }));
 
       try {
         const response = await learningService.createNote({
-          topic_id: topicId,
-          node_id: notesMode === "node" ? nodeId : undefined,
+          node_id: nodeId,
           content: noteData.content,
-          note_type: noteData.note_type || "manual",
-          source_chat_id: noteData.source_chat_id,
         });
 
         if (response.error) {
@@ -112,7 +95,7 @@ export function useLearningNotes(topicId?: string, nodeId?: string) {
         return null;
       }
     },
-    [topicId, nodeId, notesMode]
+    [nodeId]
   );
 
   // Update note
@@ -195,19 +178,17 @@ export function useLearningNotes(topicId?: string, nodeId?: string) {
 
   // Load notes when parameters change
   useEffect(() => {
-    if (topicId && notesMode) {
+    if (nodeId) {
       fetchNotes();
     } else {
       // Reset state when no valid parameters
       setState((prev) => ({
         ...prev,
         notes: [],
-        currentNotesMode: null,
-        currentTopicId: null,
         currentNodeId: null,
       }));
     }
-  }, [fetchNotes, topicId, notesMode]);
+  }, [fetchNotes, nodeId]);
 
   return {
     // State
@@ -215,8 +196,6 @@ export function useLearningNotes(topicId?: string, nodeId?: string) {
     loading: state.loading,
     saving: state.saving,
     error: state.error,
-    currentNotesMode: state.currentNotesMode,
-    currentTopicId: state.currentTopicId,
     currentNodeId: state.currentNodeId,
 
     // Actions
@@ -229,7 +208,5 @@ export function useLearningNotes(topicId?: string, nodeId?: string) {
     // Computed
     hasNotes: state.notes.length > 0,
     notesCount: state.notes.length,
-    isTopicNotes: notesMode === "topic",
-    isNodeNotes: notesMode === "node",
   };
 }

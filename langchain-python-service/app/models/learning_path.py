@@ -21,9 +21,6 @@ class LearningNode(BaseModel):
     prompt_sample: str
     position_x: int = 0
     position_y: int = 0
-    is_completed: bool = False
-    created_at: str = ""
-    updated_at: str = ""
 
 class LearningPathResponse(BaseModel):
     """Response model for a generated learning path."""

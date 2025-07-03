@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { supabase } from "../config/supabase";
 import { getAuthenticatedUser } from "../utils/auth.utils";
+import { randomUUID } from "crypto";
 
 const router = Router();
 
@@ -20,9 +21,7 @@ router.get("/", async (req, res) => {
         title,
         description,
         created_at,
-        updated_at,
-        total_nodes,
-        completed_nodes
+        updated_at
       `
       )
       .eq("user_id", user.id)
@@ -36,7 +35,7 @@ router.get("/", async (req, res) => {
     // Auto-create sample topic if no topics exist
     if (!topics || topics.length === 0) {
       const newTopic = {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         user_id: user.id,
         title: "Khởi Đầu Hành Trình Học Tập",
         description: "Topic mẫu để bắt đầu trải nghiệm platform",
@@ -93,8 +92,6 @@ router.post("/", async (req, res) => {
       description: description.trim(),
       prompt: prompt?.trim() || null,
       is_active: true,
-      total_nodes: 0,
-      completed_nodes: 0,
     };
 
     const { data, error } = await supabase
@@ -133,7 +130,11 @@ router.get("/:id", async (req, res) => {
     // Get topic
     const { data: topic, error: topicError } = await supabase
       .from("learning_topics")
-      .select("*")
+      .select(
+        `
+        id, user_id, title, description, prompt, created_at, updated_at, is_active
+      `
+      )
       .eq("id", topicId)
       .eq("user_id", user.id)
       .single();
@@ -147,7 +148,11 @@ router.get("/:id", async (req, res) => {
     // Get nodes
     const { data: nodes, error: nodesError } = await supabase
       .from("tree_nodes")
-      .select("*")
+      .select(
+        `
+        id, topic_id, parent_id, title, description, prompt_sample, requires, next, level, position_x, position_y, created_at
+      `
+      )
       .eq("topic_id", topicId)
       .order("level", { ascending: true });
 
@@ -315,7 +320,7 @@ router.get("/:id/nodes", async (req, res) => {
   }
 });
 
-// PUT /api/learning/:id/nodes/:nodeId - Cập nhật node
+// PUT /api/learning/:id/nodes/:nodeId - Update user progress for a single node
 router.put("/:id/nodes/:nodeId", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
@@ -323,11 +328,16 @@ router.put("/:id/nodes/:nodeId", async (req, res) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const topicId = req.params.id;
-    const nodeId = req.params.nodeId;
+    const { id: topicId, nodeId } = req.params;
     const { is_completed } = req.body;
 
-    // Verify topic ownership
+    if (typeof is_completed !== "boolean") {
+      return res
+        .status(400)
+        .json({ error: "Trường is_completed phải là boolean" });
+    }
+
+    // Verify topic ownership to ensure user can "complete" a node in it
     const { data: topic } = await supabase
       .from("learning_topics")
       .select("user_id")
@@ -340,35 +350,26 @@ router.put("/:id/nodes/:nodeId", async (req, res) => {
       });
     }
 
+    // Upsert the progress
     const { data, error } = await supabase
-      .from("tree_nodes")
-      .update({ is_completed })
-      .eq("id", nodeId)
-      .eq("topic_id", topicId)
+      .from("user_learning_progress")
+      .upsert(
+        {
+          user_id: user.id,
+          node_id: nodeId,
+          is_completed: is_completed,
+          completed_at: is_completed ? new Date().toISOString() : null,
+        },
+        { onConflict: "user_id,node_id" }
+      )
       .select()
       .single();
 
     if (error) {
       return res.status(500).json({
-        error: "Không thể cập nhật node",
+        error: "Không thể cập nhật tiến độ học tập",
         details: error.message,
       });
-    }
-
-    // Update completed_nodes count in topic
-    if (is_completed !== undefined) {
-      const { data: allNodes } = await supabase
-        .from("tree_nodes")
-        .select("is_completed")
-        .eq("topic_id", topicId);
-
-      const completedCount =
-        allNodes?.filter((n) => n.is_completed).length || 0;
-
-      await supabase
-        .from("learning_topics")
-        .update({ completed_nodes: completedCount })
-        .eq("id", topicId);
     }
 
     return res.json({ data });
@@ -380,7 +381,7 @@ router.put("/:id/nodes/:nodeId", async (req, res) => {
   }
 });
 
-// POST /api/learning/:id/nodes/batch - Cập nhật nhiều nodes
+// POST /api/learning/:id/nodes/batch - Update user progress for multiple nodes
 router.post("/:id/nodes/batch", async (req, res) => {
   try {
     const user = await getAuthenticatedUser(req);
@@ -391,9 +392,13 @@ router.post("/:id/nodes/batch", async (req, res) => {
     const topicId = req.params.id;
     const { nodeIds, is_completed } = req.body;
 
-    if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+    if (
+      !Array.isArray(nodeIds) ||
+      nodeIds.length === 0 ||
+      typeof is_completed !== "boolean"
+    ) {
       return res.status(400).json({
-        error: "nodeIds phải là array và không được rỗng",
+        error: "nodeIds phải là array và is_completed phải là boolean",
       });
     }
 
@@ -406,40 +411,35 @@ router.post("/:id/nodes/batch", async (req, res) => {
 
     if (!topic || topic.user_id !== user.id) {
       return res.status(403).json({
-        error: "Bạn không có quyền cập nhật nodes này",
+        error: "Bạn không có quyền cập nhật các node này",
       });
     }
 
-    // Update nodes
-    const { error } = await supabase
-      .from("tree_nodes")
-      .update({ is_completed })
-      .eq("topic_id", topicId)
-      .in("id", nodeIds);
+    // Prepare records for upsert
+    const progressRecords = nodeIds.map((nodeId) => ({
+      user_id: user.id,
+      node_id: nodeId,
+      is_completed: is_completed,
+      completed_at: is_completed ? new Date().toISOString() : null,
+    }));
+
+    // Upsert the progress records
+    const { data, error } = await supabase
+      .from("user_learning_progress")
+      .upsert(progressRecords, { onConflict: "user_id,node_id" })
+      .select();
 
     if (error) {
       return res.status(500).json({
-        error: "Không thể cập nhật nodes",
+        error: "Không thể cập nhật hàng loạt tiến độ học tập",
         details: error.message,
       });
     }
 
-    // Update completed_nodes count
-    const { data: allNodes } = await supabase
-      .from("tree_nodes")
-      .select("is_completed")
-      .eq("topic_id", topicId);
-
-    const completedCount = allNodes?.filter((n) => n.is_completed).length || 0;
-
-    await supabase
-      .from("learning_topics")
-      .update({ completed_nodes: completedCount })
-      .eq("id", topicId);
-
     return res.json({
       success: true,
-      message: `Đã cập nhật ${nodeIds.length} nodes`,
+      message: `Đã cập nhật ${data?.length || 0} mục tiến độ`,
+      data,
     });
   } catch (error) {
     console.error("Lỗi server:", error);

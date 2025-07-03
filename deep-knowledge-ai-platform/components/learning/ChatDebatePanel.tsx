@@ -21,13 +21,14 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { useLearningChat } from "@/hooks/use-learning-chat";
 import { MermaidDiagram } from './MermaidDiagram';
+import { learningService } from '@/lib/services/learning';
+import { useAIChatStream } from '@/hooks/use-ai-chat-stream';
 
 interface ChatDebatePanelProps {
     selectedTopic: LearningTopic | null;
     selectedNode?: { id: string; title: string } | null;
-    onAddToNotes: (messageId: string) => void;
+    onAddToNotes: (messageId: string, content: string) => void;
 }
 
 // Memoized component để format AI response - CRITICAL cho performance
@@ -146,11 +147,11 @@ const MessageItem = React.memo(({
     onCopyMessage
 }: {
     message: ChatMessage;
-    onAddToNotes: (messageId: string) => void;
+    onAddToNotes: (messageId: string, content: string) => void;
     onCopyMessage: (content: string) => void;
 }) => {
-    const formatTime = useCallback((date: Date) => {
-        return date.toLocaleTimeString('vi-VN', {
+    const formatTime = useCallback((dateString: string) => {
+        return new Date(dateString).toLocaleTimeString('vi-VN', {
             hour: '2-digit',
             minute: '2-digit'
         });
@@ -163,42 +164,28 @@ const MessageItem = React.memo(({
                 message.role === 'user' ? 'justify-end' : 'justify-start'
             )}
         >
-            {/* AI Avatar - only for AI messages */}
-            {message.role === 'mentor' && (
+            {message.role === 'assistant' && (
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center flex-shrink-0 mt-1">
                     <GraduationCap className="h-4 w-4 text-primary-foreground" />
                 </div>
             )}
-
-            {/* Message Content */}
             <div className={cn(
                 "flex flex-col max-w-[85%] sm:max-w-[70%]",
                 message.role === 'user' ? 'items-end' : 'items-start'
             )}>
-                {/* Message Bubble */}
-                {message.role === 'user' ? (
-                    /* User Message - Bubble Style */
-                    <div className="bg-primary text-primary-foreground rounded-2xl rounded-br-md px-4 py-3 shadow-sm">
-                        <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                            {message.content}
-                        </div>
-                    </div>
-                ) : (
-                    /* Mentor Message - Modern Typography with Inter Font */
-                    <div className="w-full space-y-3">
-                        <FormattedAIResponse content={message.content} />
-                    </div>
-                )}
-
-                {/* Message Meta & Actions */}
+                <div className={cn(
+                    "rounded-2xl px-4 py-3 shadow-sm",
+                    message.role === 'user' ? 'bg-primary text-primary-foreground rounded-br-md' : ''
+                )}>
+                    <FormattedAIResponse content={message.content} />
+                </div>
                 <div className={cn(
                     "flex items-center gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200",
                     message.role === 'user' ? 'flex-row-reverse' : 'flex-row'
                 )}>
                     <span className="text-xs text-muted-foreground">
-                        {formatTime(message.timestamp)}
+                        {formatTime(message.created_at)}
                     </span>
-
                     <div className="flex items-center gap-1">
                         <Button
                             variant="ghost"
@@ -208,27 +195,19 @@ const MessageItem = React.memo(({
                         >
                             <Copy className="h-3 w-3" />
                         </Button>
-
-                        {message.canAddToNotes && (
+                        {message.role === 'assistant' && (
                             <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                                onClick={() => onAddToNotes(message.id)}
-                                disabled={message.isMarkedForNotes}
+                                onClick={() => onAddToNotes(message.id, message.content)}
                             >
-                                {message.isMarkedForNotes ? (
-                                    <BookmarkCheck className="h-3 w-3 text-green-500" />
-                                ) : (
-                                    <BookmarkPlus className="h-3 w-3" />
-                                )}
+                                <BookmarkPlus className="h-3 w-3" />
                             </Button>
                         )}
                     </div>
                 </div>
             </div>
-
-            {/* User Avatar - only for user messages */}
             {message.role === 'user' && (
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-muted to-muted/80 flex items-center justify-center flex-shrink-0 mt-1">
                     <User className="h-4 w-4 text-muted-foreground" />
@@ -237,7 +216,6 @@ const MessageItem = React.memo(({
         </div>
     );
 });
-
 MessageItem.displayName = 'MessageItem';
 
 export function ChatDebatePanel({
@@ -246,36 +224,31 @@ export function ChatDebatePanel({
     onAddToNotes,
 }: ChatDebatePanelProps) {
     const [inputValue, setInputValue] = useState('');
-    const inputRef = useRef<HTMLInputElement>(null);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-    // Use streaming chat hook
-    const {
-        messages: learningChatMessages,
-        loading,
-        sending: learningChatSending,
-        error,
-        sendMessageStream,
-        clearMessages,
-    } = useLearningChat(selectedTopic?.id, selectedNode?.id);
+    const { sendMessageStream, isStreaming } = useAIChatStream();
 
-    // Convert LearningChat to ChatMessage format
-    const convertToDisplayMessages = (learningMessages: any[]): ChatMessage[] => {
-        return learningMessages.map((msg) => ({
-            id: msg.id,
-            topicId: msg.topic_id,
-            role: msg.is_ai_response ? 'mentor' : 'user',
-            content: msg.message,
-            timestamp: new Date(msg.created_at),
-            canAddToNotes: msg.is_ai_response,
-            isMarkedForNotes: false,
-            isStreaming: msg.isStreaming || false
-        }));
-    };
+    const sessionId = useMemo(() => selectedNode?.id || selectedTopic?.id, [selectedTopic, selectedNode]);
 
-    const displayMessages = convertToDisplayMessages(learningChatMessages);
+    useEffect(() => {
+        const fetchMessages = async () => {
+            if (!sessionId) {
+                setMessages([]);
+                return;
+            };
 
-    // Handle auto-scrolling when messages change
+            setIsLoading(true);
+            const response = await learningService.getLearningChats(sessionId);
+            if (response.data) {
+                setMessages(response.data as any);
+            }
+            setIsLoading(false);
+        };
+        fetchMessages();
+    }, [sessionId]);
+
     useEffect(() => {
         if (scrollAreaRef.current) {
             const scrollElement = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
@@ -283,39 +256,60 @@ export function ChatDebatePanel({
                 scrollElement.scrollTop = scrollElement.scrollHeight;
             }
         }
-    }, [displayMessages]);
+    }, [messages]);
 
-    // Memoize handlers để prevent unnecessary re-renders
     const handleCopyMessage = useCallback(async (content: string) => {
-        try {
-            await navigator.clipboard.writeText(content);
-        } catch (err) {
-            console.error('Failed to copy text: ', err);
-        }
+        await navigator.clipboard.writeText(content);
     }, []);
 
-    const handleAddToNotes = useCallback((messageId: string) => {
-        onAddToNotes(messageId);
-    }, [onAddToNotes]);
-
-    // Form submission handler
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!inputValue.trim() || learningChatSending) return;
+        if (!inputValue.trim() || isStreaming || !sessionId || !selectedTopic) return;
 
-        const message = inputValue.trim();
+        const messageContent = inputValue.trim();
         setInputValue('');
 
-        try {
-            // Use streaming method for better UX
-            await sendMessageStream({ message });
-        } catch (error) {
-            console.error("Error sending message:", error);
-        }
-    }, [inputValue, learningChatSending, sendMessageStream]);
+        // Optimistic update for user message
+        const tempUserMessage: ChatMessage = {
+            id: `temp-user-${Date.now()}`,
+            session_id: sessionId,
+            role: 'user',
+            content: messageContent,
+            created_at: new Date().toISOString(),
+        };
+        setMessages(prev => [...prev, tempUserMessage]);
 
-    // Fallback to props messages if learning chat is not loaded
-    const finalMessages = learningChatMessages.length > 0 ? displayMessages : [];
+        await sendMessageStream(messageContent, selectedTopic.id, selectedNode?.id, {
+            onUserMessage: (realUserMessage: ChatMessage) => {
+                setMessages(prev => prev.map(m => m.id === tempUserMessage.id ? realUserMessage : m));
+            },
+            onChunk: (content: string, fullContent: string) => {
+                setMessages(prev => {
+                    const existingAiMessage = prev.find(m => m.id.startsWith('temp-ai-'));
+                    if (existingAiMessage) {
+                        return prev.map(m => m.id === existingAiMessage.id ? { ...m, content: fullContent } : m);
+                    } else {
+                        const tempAiMessage: ChatMessage = {
+                            id: `temp-ai-${Date.now()}`,
+                            session_id: sessionId,
+                            role: 'assistant',
+                            content: fullContent,
+                            created_at: new Date().toISOString(),
+                        };
+                        return [...prev, tempAiMessage];
+                    }
+                });
+            },
+            onComplete: (data: { ai_message: ChatMessage; session_id: string }) => {
+                setMessages(prev => prev.map(m => m.id.startsWith('temp-ai-') ? data.ai_message : m));
+            },
+            onError: (error: string) => {
+                console.error("Streaming error:", error);
+                setMessages(prev => prev.filter(m => m.id !== tempUserMessage.id && !m.id.startsWith('temp-ai-')));
+            }
+        });
+
+    }, [inputValue, isStreaming, sendMessageStream, sessionId, selectedTopic, selectedNode]);
 
     if (!selectedTopic) {
         return (
@@ -338,9 +332,9 @@ export function ChatDebatePanel({
             {/* Header - Clean minimal design */}
             <div className="flex items-center gap-3 p-6 bg-background/80 backdrop-blur-sm">
                 <div className="flex-1 min-w-0">
-                    <h2 className="text-lg font-medium text-foreground truncate">{selectedTopic.title}</h2>
+                    <h2 className="text-lg font-medium text-foreground truncate">{selectedNode?.title || selectedTopic.title}</h2>
                     <p className="text-sm text-muted-foreground">
-                        AI Mentor • {finalMessages.length} tin nhắn
+                        AI Mentor • {messages.length} tin nhắn
                         {selectedNode && ` • Node: ${selectedNode.title}`}
                     </p>
                 </div>
@@ -349,7 +343,7 @@ export function ChatDebatePanel({
             {/* Messages Area - Clean, spacious */}
             <ScrollArea ref={scrollAreaRef} className="flex-1">
                 <div className="px-4 py-6 space-y-8 max-w-4xl mx-auto">
-                    {finalMessages.length === 0 ? (
+                    {messages.length === 0 ? (
                         <div className="text-center py-12">
                             <div className="bg-gradient-to-br from-muted/50 to-background rounded-2xl p-8 mx-auto max-w-md">
                                 <div className="w-12 h-12 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center">
@@ -362,18 +356,18 @@ export function ChatDebatePanel({
                             </div>
                         </div>
                     ) : (
-                        finalMessages.map((message) => (
+                        messages.map((message) => (
                             <MessageItem
                                 key={message.id}
                                 message={message}
-                                onAddToNotes={handleAddToNotes}
+                                onAddToNotes={onAddToNotes}
                                 onCopyMessage={handleCopyMessage}
                             />
                         ))
                     )}
 
                     {/* Typing Indicator - Modern style */}
-                    {learningChatSending && (
+                    {isStreaming && (
                         <div className="flex gap-4">
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center flex-shrink-0">
                                 <GraduationCap className="h-4 w-4 text-primary-foreground" />
@@ -396,19 +390,18 @@ export function ChatDebatePanel({
                     <form onSubmit={handleSubmit} className="flex gap-3 items-end">
                         <div className="flex-1 relative">
                             <Input
-                                ref={inputRef}
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
                                 placeholder="Gửi tin nhắn..."
-                                className="rounded-2xl bg-muted/50 border-0 focus:ring-2 focus:ring-primary/20 focus:bg-background pr-12 py-3 text-sm resize-none min-h-[44px]"
-                                disabled={learningChatSending}
+                                className="rounded-2xl bg-muted/50 border-0 flex-1"
+                                disabled={isStreaming}
                             />
                         </div>
                         <Button
                             type="submit"
                             size="icon"
                             className="rounded-full h-11 w-11 shadow-sm"
-                            disabled={!inputValue.trim() || learningChatSending}
+                            disabled={!inputValue.trim() || isStreaming}
                         >
                             <Send className="h-4 w-4" />
                         </Button>

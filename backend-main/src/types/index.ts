@@ -27,7 +27,6 @@ export interface TreeNode {
   level: number;
   position_x: number;
   position_y: number;
-  is_completed: boolean;
   created_at: string;
 }
 

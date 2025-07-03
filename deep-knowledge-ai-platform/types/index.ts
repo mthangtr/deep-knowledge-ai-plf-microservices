@@ -52,6 +52,26 @@ export interface BackgroundOrb {
 export type ClickHandler = () => void;
 export type SuggestionClickHandler = (suggestion: SuggestionOption) => void;
 
+// Corresponds to the `chat_sessions` table from the database
+export interface ChatSession {
+  id: string;
+  user_id: string;
+  topic_id: string;
+  node_id: string | null;
+  created_at: string;
+  last_activity: string;
+}
+
+// Corresponds to the `chat_messages` table from the database
+// This replaces the old ChatMessage interface
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -60,7 +80,7 @@ export interface User {
 }
 
 // Import database types
-export type { UserProfile, Plan, LearningChat, LearningNote } from "./database";
+export type { UserProfile, Plan, LearningNote } from "./database";
 
 // Re-export with alias to avoid conflict
 export type { LearningTopic as DatabaseLearningTopic } from "./database";
@@ -98,16 +118,6 @@ export interface LearningTopic {
   createdAt: Date;
   updatedAt: Date;
   messageCount: number;
-}
-
-export interface ChatMessage {
-  id: string;
-  topicId: string;
-  role: "user" | "mentor";
-  content: string;
-  timestamp: Date;
-  canAddToNotes?: boolean;
-  isMarkedForNotes?: boolean;
 }
 
 export interface Note {

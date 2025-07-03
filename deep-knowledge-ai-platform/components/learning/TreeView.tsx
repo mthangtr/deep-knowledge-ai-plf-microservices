@@ -39,11 +39,8 @@ function TreeNode({
     onNodeClick,
     parentPath = []
 }: TreeNodeProps) {
-    // Tìm child nodes dựa trên requires/next relationships
-    const childNodes = allNodes.filter(childNode => {
-        // Child node phải có node.id trong requires array của nó
-        return childNode.requires.includes(node.id);
-    });
+    // Correctly find child nodes based on parent_id relationship
+    const childNodes = allNodes.filter(childNode => childNode.parent_id === node.id);
 
     const hasChildren = childNodes.length > 0;
     const isExpanded = expandedNodes.has(node.id);
@@ -243,15 +240,13 @@ export function TreeView({ nodes, className, onNodeClick }: TreeViewProps) {
         setExpandedNodes(getDefaultExpandedNodes());
     }, [nodes]);
 
-    // Lấy root nodes: những node không có requires hoặc level = 0
-    const rootNodes = nodes.filter(node => {
-        // Root node là node không có requires (không phụ thuộc vào node nào)
-        return node.requires.length === 0;
-    }).sort((a, b) => {
-        // Sort by level first, then by title
-        if (a.level !== b.level) return a.level - b.level;
-        return a.title.localeCompare(b.title);
-    });
+    // Correctly get root nodes: those with no parent_id
+    const rootNodes = nodes.filter(node => !node.parent_id)
+        .sort((a, b) => {
+            // Sort by level first, then by title
+            if (a.level !== b.level) return a.level - b.level;
+            return a.title.localeCompare(b.title);
+        });
 
     const handleToggle = useCallback((nodeId: string) => {
         setExpandedNodes(prev => {
@@ -292,9 +287,9 @@ export function TreeView({ nodes, className, onNodeClick }: TreeViewProps) {
             if (!node) return '';
 
             const indent = '  '.repeat(level);
-            let text = `${indent}- ${node.title}\n`;
+            let text = `${indent}- ${node.title}\\n`;
 
-            const children = nodes.filter(n => n.requires.includes(nodeId));
+            const children = nodes.filter(n => n.parent_id === nodeId);
             children.forEach(child => {
                 text += generateTreeText(child.id, level + 1, new Set(visited));
             });
@@ -302,7 +297,7 @@ export function TreeView({ nodes, className, onNodeClick }: TreeViewProps) {
             return text;
         };
 
-        const treeText = rootNodes.map(root => generateTreeText(root.id)).join('\n');
+        const treeText = rootNodes.map(root => generateTreeText(root.id)).join('\\n');
         const blob = new Blob([treeText], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');

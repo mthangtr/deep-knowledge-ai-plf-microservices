@@ -1,47 +1,38 @@
 import { Router } from "express";
 import { supabase } from "../config/supabase";
 import { authenticate } from "../middleware/auth.middleware";
-import { validateTopicOwnership } from "../utils/auth.utils";
+import { validateNodeOwnership } from "../utils/auth.utils";
 import { AuthRequest } from "../types";
 
 const router = Router();
 
-// GET /api/learning/notes - Lấy notes theo topic hoặc node
+// GET /api/learning/notes - Get notes by node_id
 router.get("/", authenticate, async (req: AuthRequest, res) => {
   try {
     const userId = req.user!.id;
-    const { topic_id, node_id, limit = "50" } = req.query;
+    const { node_id } = req.query;
 
-    if (!topic_id) {
+    if (!node_id || typeof node_id !== "string") {
       return res.status(400).json({
-        error: "Missing topic_id parameter",
+        error: "Missing or invalid node_id parameter",
       });
     }
 
-    // Verify topic ownership
-    const hasAccess = await validateTopicOwnership(topic_id as string, userId);
+    // Verify user has access to this node before proceeding
+    const hasAccess = await validateNodeOwnership(node_id, userId);
     if (!hasAccess) {
       return res.status(403).json({
-        error: "Bạn không có quyền truy cập chủ đề này",
+        error: "Bạn không có quyền truy cập các ghi chú của node này",
       });
     }
 
-    // Build query
-    let query = supabase
+    // Fetch notes for the given node that belong to the current user
+    const { data, error } = await supabase
       .from("learning_notes")
       .select("*")
-      .eq("topic_id", topic_id)
-      .order("created_at", { ascending: false })
-      .limit(parseInt(limit as string));
-
-    // Handle node_id
-    if (node_id === "null" || !node_id) {
-      query = query.is("node_id", null);
-    } else {
-      query = query.eq("node_id", node_id);
-    }
-
-    const { data, error } = await query;
+      .eq("node_id", node_id)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
 
     if (error) {
       console.error("Lỗi lấy notes:", error);
@@ -53,8 +44,6 @@ router.get("/", authenticate, async (req: AuthRequest, res) => {
 
     return res.json({
       data: data || [],
-      count: data?.length || 0,
-      filters: { topic_id, node_id, limit: parseInt(limit as string) },
     });
   } catch (error) {
     console.error("Lỗi server:", error);
@@ -64,50 +53,31 @@ router.get("/", authenticate, async (req: AuthRequest, res) => {
   }
 });
 
-// POST /api/learning/notes - Tạo note mới
+// POST /api/learning/notes - Create a new note for a node
 router.post("/", authenticate, async (req: AuthRequest, res) => {
   try {
     const userId = req.user!.id;
-    const { topic_id, node_id, content, note_type, source_chat_id } = req.body;
+    const { node_id, content } = req.body;
 
     // Validate input
-    if (!topic_id || !content?.trim()) {
+    if (!node_id || !content?.trim()) {
       return res.status(400).json({
-        error: "Missing topic_id or content",
+        error: "Missing node_id or content",
       });
     }
 
-    // Verify topic ownership
-    const hasAccess = await validateTopicOwnership(topic_id, userId);
+    // Verify user has access to this node before creating a note
+    const hasAccess = await validateNodeOwnership(node_id, userId);
     if (!hasAccess) {
       return res.status(403).json({
-        error: "Bạn không có quyền tạo note cho chủ đề này",
+        error: "Bạn không có quyền tạo note cho node này",
       });
-    }
-
-    // If node_id provided, verify it belongs to topic
-    if (node_id) {
-      const { data: node, error: nodeError } = await supabase
-        .from("tree_nodes")
-        .select("topic_id")
-        .eq("id", node_id)
-        .eq("topic_id", topic_id)
-        .single();
-
-      if (nodeError || !node) {
-        return res.status(404).json({
-          error: "Node not found or doesn't belong to topic",
-        });
-      }
     }
 
     const newNote = {
-      topic_id,
-      node_id: node_id || null,
+      node_id,
       user_id: userId,
       content: content.trim(),
-      note_type: note_type || "manual",
-      source_chat_id: source_chat_id || null,
     };
 
     const { data, error } = await supabase

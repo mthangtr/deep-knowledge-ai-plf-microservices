@@ -7,11 +7,11 @@ import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 
 export default function ProfilePage() {
-    const { user, isLoading, logout } = useAuth();
+    const { user, isLoading, signOut } = useAuth();
     const router = useRouter();
 
     const handleSignOut = async () => {
-        await logout();
+        await signOut();
         router.push('/signin');
     };
 
@@ -46,10 +46,10 @@ export default function ProfilePage() {
             <Card className="max-w-2xl mx-auto">
                 <CardHeader className="text-center">
                     <Avatar className="w-24 h-24 mx-auto mb-4 border-4 border-primary/20">
-                        <AvatarImage src={user.image || ''} alt={user.name || 'User'} />
-                        <AvatarFallback>{user.name?.charAt(0).toUpperCase() || 'U'}</AvatarFallback>
+                        <AvatarImage src={user.user_metadata?.avatar_url || ''} alt={user.user_metadata?.name || 'User'} />
+                        <AvatarFallback>{user.user_metadata?.name?.charAt(0).toUpperCase() || 'U'}</AvatarFallback>
                     </Avatar>
-                    <CardTitle className="text-3xl">{user.name}</CardTitle>
+                    <CardTitle className="text-3xl">{user.user_metadata?.name}</CardTitle>
                     <CardDescription>{user.email}</CardDescription>
                 </CardHeader>
                 <CardContent className="mt-4 flex flex-col items-center">

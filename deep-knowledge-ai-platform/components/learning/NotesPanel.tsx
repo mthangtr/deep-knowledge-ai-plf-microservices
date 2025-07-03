@@ -62,7 +62,7 @@ export function NotesPanel({
         createNote,
         updateNote,
         saving: hookSaving
-    } = useLearningNotes(selectedTopic?.id, selectedNodeId);
+    } = useLearningNotes(selectedNodeId || selectedTopic?.id);
 
     // Sync local state with props
     useEffect(() => {
@@ -81,7 +81,7 @@ export function NotesPanel({
                     onNoteUpdated?.(updatedNote);
                 }
             } else {
-                const newNote = await createNote({ content: contentToSave, note_type: 'manual' });
+                const newNote = await createNote({ content: contentToSave });
                 if (newNote) {
                     setLocalNotes(prev => [...prev, newNote]);
                     setEditingNote(newNote); // Switch to editing mode for the new note

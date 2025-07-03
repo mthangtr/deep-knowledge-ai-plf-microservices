@@ -27,7 +27,6 @@ type AutoPromptResponse = {
 
 class LearningService {
   private async getHeaders() {
-
     // Get JWT token from sessionStorage, fallback to cookie
     let token = sessionStorage.getItem("jwt_token");
 
@@ -39,7 +38,6 @@ class LearningService {
       );
       token = jwtCookie ? jwtCookie.split("=")[1] : null;
     }
-
 
     const headers = getAuthHeaders(token || undefined);
 
@@ -54,7 +52,6 @@ class LearningService {
       const response = await fetch(API_ENDPOINTS.learning.topics, {
         headers,
       });
-
 
       const jsonResponse = await response.json();
 
@@ -485,17 +482,11 @@ class LearningService {
     }
   }
 
-  // New method for getting notes with topic_id + optional node_id
-  async getNotes(
-    topicId: string,
-    nodeId?: string
-  ): Promise<ApiResponse<LearningNote[]>> {
+  // New method for getting notes with just node_id
+  async getNotes(nodeId: string): Promise<ApiResponse<LearningNote[]>> {
     try {
       const params = new URLSearchParams();
-      params.append("topic_id", topicId);
-      if (nodeId) {
-        params.append("node_id", nodeId);
-      }
+      params.append("node_id", nodeId);
 
       const response = await fetch(`${API_ENDPOINTS.notes.list}?${params}`, {
         headers: await this.getHeaders(),
@@ -507,11 +498,8 @@ class LearningService {
   }
 
   async createNote(note: {
-    topic_id: string;
-    node_id?: string; // Optional - null for topic-level notes
+    node_id: string;
     content: string;
-    note_type?: "manual" | "extracted_from_chat" | "ai_summary";
-    source_chat_id?: string;
   }): Promise<ApiResponse<LearningNote>> {
     try {
       const response = await fetch(API_ENDPOINTS.notes.list, {

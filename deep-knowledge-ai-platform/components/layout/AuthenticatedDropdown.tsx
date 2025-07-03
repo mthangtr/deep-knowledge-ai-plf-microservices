@@ -17,7 +17,7 @@ import { SimpleThemeToggle } from "../ui/theme-toggle";
 interface AuthenticatedDropdownProps extends BaseComponentProps { }
 
 export const AuthenticatedDropdown: React.FC<AuthenticatedDropdownProps> = ({ className = "" }) => {
-    const { user, isAuthenticated, logout, isLoading } = useAuth();
+    const { user, isAuthenticated, signOut, isLoading } = useAuth();
 
     return (
         <div className="flex items-center space-x-3">
@@ -31,9 +31,9 @@ export const AuthenticatedDropdown: React.FC<AuthenticatedDropdownProps> = ({ cl
                         <DropdownMenuTrigger asChild>
                             <Button disabled={isLoading} variant="ghost" className="relative h-8 w-8 rounded-full">
                                 <Avatar className="h-8 w-8">
-                                    <AvatarImage src={user.image || ''} alt={user.name || user.email} />
+                                    <AvatarImage src={user.user_metadata?.avatar_url || ''} alt={user.user_metadata?.name || user.email} />
                                     <AvatarFallback className="bg-card text-foreground">
-                                        {user.name?.charAt(0) || user.email.charAt(0).toUpperCase()}
+                                        {user.user_metadata?.name?.charAt(0) || user.email?.charAt(0).toUpperCase()}
                                     </AvatarFallback>
                                 </Avatar>
                             </Button>
@@ -41,14 +41,14 @@ export const AuthenticatedDropdown: React.FC<AuthenticatedDropdownProps> = ({ cl
                         <DropdownMenuContent className="w-56" align="end" forceMount>
                             <div className="flex items-center justify-start gap-2 p-2">
                                 <Avatar className="h-8 w-8">
-                                    <AvatarImage src={user.image || ''} alt={user.name || user.email} />
+                                    <AvatarImage src={user.user_metadata?.avatar_url || ''} alt={user.user_metadata?.name || user.email} />
                                     <AvatarFallback className="bg-card text-foreground text-xs">
-                                        {user.name?.charAt(0) || user.email.charAt(0).toUpperCase()}
+                                        {user.user_metadata?.name?.charAt(0) || user.email?.charAt(0).toUpperCase()}
                                     </AvatarFallback>
                                 </Avatar>
                                 <div className="flex flex-col space-y-1 leading-none">
-                                    {user.name && (
-                                        <p className="font-medium text-sm">{user.name}</p>
+                                    {user.user_metadata?.name && (
+                                        <p className="font-medium text-sm">{user.user_metadata?.name}</p>
                                     )}
                                     <p className="text-xs leading-none text-muted-foreground">
                                         {user.email}
@@ -71,7 +71,7 @@ export const AuthenticatedDropdown: React.FC<AuthenticatedDropdownProps> = ({ cl
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                                 className="cursor-pointer text-status-error focus:text-status-error"
-                                onClick={() => logout()}
+                                onClick={() => signOut()}
                             >
                                 <LogOut className="mr-2 h-4 w-4" />
                                 Logout

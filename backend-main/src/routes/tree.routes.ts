@@ -55,16 +55,9 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
       const tempId = node.temp_id || node.id;
       const realId = tempIdMap.get(tempId) || randomUUID();
 
-      // Resolve parent, requires, next from temp_id to real UUID
       const parentId = node.parent_id
         ? tempIdMap.get(node.parent_id) || null
         : null;
-      const resolvedRequires = (node.requires || [])
-        .map((reqTempId: string) => tempIdMap.get(reqTempId))
-        .filter(Boolean);
-      const resolvedNext = (node.next || [])
-        .map((nextTempId: string) => tempIdMap.get(nextTempId))
-        .filter(Boolean);
 
       return {
         id: realId,
@@ -73,8 +66,8 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
         title: node.title.trim(),
         description: node.description.trim(),
         prompt_sample: node.prompt_sample?.trim() || null,
-        requires: resolvedRequires,
-        next: resolvedNext,
+        requires: [], // Explicitly ignoring as per new logic
+        next: [], // Explicitly ignoring as per new logic
         level: node.level || 0,
         position_x: node.position_x || 0,
         position_y: node.position_y || 0,
