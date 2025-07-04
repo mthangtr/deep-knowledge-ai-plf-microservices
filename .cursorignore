@@ -1,11 +1,1 @@
 # Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
-./langchain-python-service/.env
-./langchain-python-service/.env.local
-
-./deep-knowledge-ai-platform/.env
-./deep-knowledge-ai-platform/.env.local
-./deep-knowledge-ai-platform/.next
-./deep-knowledge-ai-platform/.node_modules
-
-./backend-main/.env
-./backend-main/.env.local

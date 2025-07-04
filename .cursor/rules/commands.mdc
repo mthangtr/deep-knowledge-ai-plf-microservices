@@ -1,33 +1,6 @@
-# Terminal Commands Rules
-
-## Mục tiêu
-
-Quy định rõ khi nào được gọi `run_terminal_cmd`, tránh spam terminal hoặc chạy lệnh không cần thiết.
-
-## Triết lý
-
-**"Code first, commands last"** - Ưu tiên `edit_file`, `read_file`, `codebase_search`. Chỉ dùng terminal khi không còn cách nào khác.
-
 ---
-
-## 🚫 Lệnh KHÔNG được gọi (trừ khi user yêu cầu rõ ràng)
-
-```bash
-ls                    # Dùng file_search thay thế
-pwd                   # Chỉ khi cần xác minh path
-cat file.txt          # Dùng read_file thay thế
-echo "text"           # Không cần thiết
-cd ...                # Chỉ khi biết chắc path
-git status            # Chỉ khi user hỏi
-npm list              # Chỉ khi debug dependency
-npm run build         # Chỉ khi fix lỗi build
-npm test              # Chỉ khi fix lỗi test
-```
-
-### ⚠️ Lưu ý:
-
-- Nếu cần kiểm tra thư mục → chỉ gọi `ls && pwd` **một lần duy nhất** rồi phân tích kết quả
-
+description: Use if need to request commands to run
+alwaysApply: false
 ---
 
 ## ✅ Khi nào ĐƯỢC phép gọi terminal
