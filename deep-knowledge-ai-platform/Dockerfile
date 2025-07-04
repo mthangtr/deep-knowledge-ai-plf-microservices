@@ -35,14 +35,13 @@ ENV NEXTAUTH_URL=http://localhost:3000
 ENV NEXTAUTH_SECRET=kNFNj0uQCVzdBoVKAbAKUUTf0JPtYqlD
 ENV SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpreWtoZWFwd3lvemJ6dG5udHBoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MDY3Mjg0OSwiZXhwIjoyMDY2MjQ4ODQ5fQ.TdKaQaagqE5kQTQrXk4NQ4xHaSFDRf6ufjUpUoc22uo
 ENV OPENROUTER_API_KEY=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
-ENV NODE_ENV=production
 
-# Create .env.production file to ensure server-side vars are available
-RUN echo "NEXTAUTH_URL=${NEXTAUTH_URL}" > .env.production
-RUN echo "NEXTAUTH_SECRET=${NEXTAUTH_SECRET}" >> .env.production
-RUN echo "SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}" >> .env.production
-RUN echo "OPENROUTER_API_KEY=${OPENROUTER_API_KEY}" >> .env.production
-RUN echo "NEXT_PUBLIC_API_GATEWAY_URL=http://localhost:8080" >> .env.production
+# Create .env.local file to ensure server-side vars are available
+RUN echo "NEXTAUTH_URL=${NEXTAUTH_URL}" > .env.local
+RUN echo "NEXTAUTH_SECRET=${NEXTAUTH_SECRET}" >> .env.local
+RUN echo "SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}" >> .env.local
+RUN echo "OPENROUTER_API_KEY=${OPENROUTER_API_KEY}" >> .env.local
+RUN echo "NEXT_PUBLIC_API_GATEWAY_URL=http://localhost:8080" >> .env.local
 
 # Build the Next.js application
 RUN pnpm build
@@ -60,7 +59,7 @@ ENV NEXTAUTH_URL=http://localhost:3000
 ENV NEXTAUTH_SECRET=kNFNj0uQCVzdBoVKAbAKUUTf0JPtYqlD
 
 # Copy built artifacts from the builder stage
-COPY --from=builder /app/.env.production ./.env.production
+COPY --from=builder /app/.env.local ./.env.local
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
