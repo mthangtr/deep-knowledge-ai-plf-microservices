@@ -19,7 +19,7 @@ router.get("/", async (req, res) => {
       .from("learning_topics")
       .select(
         `
-        *,
+        id, user_id, title, description, created_at, updated_at, is_active,
         tree_nodes ( id )
       `
       )
@@ -57,7 +57,7 @@ router.post("/", async (req, res) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { title, description, prompt } = req.body;
+    const { title, description } = req.body;
 
     // Validate input
     if (!title || !description) {
@@ -70,7 +70,6 @@ router.post("/", async (req, res) => {
       user_id: user.id,
       title: title.trim(),
       description: description.trim(),
-      prompt: prompt?.trim() || null,
       is_active: true,
     };
 
@@ -99,6 +98,10 @@ router.post("/", async (req, res) => {
 
 // GET /api/learning/:id - Lấy thông tin topic và nodes
 router.get("/:id", async (req, res) => {
+  console.log(`[DEBUG] [GET /api/learning/:id] === NEW REQUEST ===`);
+  console.log(`[DEBUG] [GET /api/learning/:id] Request URL: ${req.url}`);
+  console.log(`[DEBUG] [GET /api/learning/:id] Params:`, req.params);
+  console.log(`[DEBUG] [GET /api/learning/:id] Headers:`, req.headers);
   try {
     if (!supabaseAdmin) {
       throw new Error("Supabase admin client not initialized");
@@ -110,17 +113,30 @@ router.get("/:id", async (req, res) => {
 
     const topicId = req.params.id;
 
+    console.log(
+      `[DEBUG] [GET /api/learning/:id] Fetching topic_id: ${topicId} for user_id: ${user.id}`
+    );
+
+    console.log(
+      `[DEBUG] [GET /api/learning/:id] Querying learning_topics table...`
+    );
     // Get topic using admin client
     const { data: topic, error: topicError } = await supabaseAdmin
       .from("learning_topics")
       .select(
         `
-        id, user_id, title, description, prompt, created_at, updated_at, is_active
+        id, user_id, title, description, created_at, updated_at, is_active
       `
       )
       .eq("id", topicId)
       .eq("user_id", user.id)
       .single();
+
+    console.log(`[DEBUG] [GET /api/learning/:id] Topic query result:`, {
+      topic,
+      topicError: topicError?.message,
+      hasData: !!topic,
+    });
 
     if (topicError || !topic) {
       return res.status(404).json({
@@ -128,6 +144,9 @@ router.get("/:id", async (req, res) => {
       });
     }
 
+    console.log(
+      `[DEBUG] [GET /api/learning/:id] Querying tree_nodes table for topic_id: ${topicId}...`
+    );
     // Get nodes using admin client
     const { data: nodes, error: nodesError } = await supabaseAdmin
       .from("tree_nodes")
@@ -139,9 +158,39 @@ router.get("/:id", async (req, res) => {
       .eq("topic_id", topicId)
       .order("level", { ascending: true });
 
+    console.log(`[DEBUG] [GET /api/learning/:id] Nodes query result:`, {
+      nodesCount: nodes?.length || 0,
+      nodesError: nodesError?.message,
+      firstNode: nodes?.[0],
+    });
+
+    // Log chi tiết để kiểm tra parent_id
+    console.log(
+      `[DEBUG] All nodes data from DB:`,
+      nodes?.map((n) => ({
+        id: n.id.substring(0, 8),
+        title: n.title.substring(0, 20),
+        parent_id: n.parent_id ? n.parent_id.substring(0, 8) : null,
+        level: n.level,
+      }))
+    );
+
     if (nodesError) {
       console.error("Lỗi lấy nodes:", nodesError);
     }
+
+    // Debug response structure before sending
+    console.log(`[DEBUG] Final response structure:`, {
+      topic: !!topic,
+      nodesLength: nodes?.length || 0,
+      sampleNodeStructure: nodes?.[0] ? Object.keys(nodes[0]) : [],
+      sampleNode: nodes?.[0],
+    });
+
+    // Disable caching for this endpoint
+    res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
 
     return res.json({
       topic,

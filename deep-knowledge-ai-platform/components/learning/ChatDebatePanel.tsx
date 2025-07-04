@@ -24,6 +24,7 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { MermaidDiagram } from './MermaidDiagram';
 import { learningService } from '@/lib/services/learning';
 import { useAIChatStream } from '@/hooks/use-ai-chat-stream';
+import { useLearningSession } from '@/components/providers/chat-session-provider';
 
 interface ChatDebatePanelProps {
     selectedTopic: LearningTopic | null;
@@ -205,16 +206,32 @@ export function ChatDebatePanel({
     const inputRef = useRef<HTMLInputElement>(null);
 
     const { sendMessageStream, isStreaming } = useAIChatStream();
+    const { getOrCreateSession, sessionId, setSessionId } = useLearningSession();
 
-    const sessionId = useMemo(() => selectedNode?.id || selectedTopic?.id, [selectedTopic, selectedNode]);
+    // Khi chọn node/topic mới, luôn lấy sessionId thực sự từ backend
+    useEffect(() => {
+        if (!selectedTopic) {
+            setSessionId(null);
+            setMessages([]);
+            return;
+        }
+        (async () => {
+            const session = await getOrCreateSession(selectedTopic.id, selectedNode?.id);
+            if (session?.id) {
+                setSessionId(session.id);
+            } else {
+                setSessionId(null);
+            }
+        })();
+    }, [selectedTopic?.id, selectedNode?.id]);
 
+    // Lấy messages theo sessionId thực sự
     useEffect(() => {
         const fetchMessages = async () => {
             if (!sessionId) {
                 setMessages([]);
                 return;
-            };
-
+            }
             setIsLoading(true);
             try {
                 const response = await learningService.getLearningChats(sessionId);

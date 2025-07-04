@@ -1,159 +1,171 @@
+# Workflow Automation Rules
+
+## Mục tiêu
+
+Tự động hóa thao tác code và sử dụng công cụ hợp lý, tách rõ 2 chế độ:
+
+- **Simple Mode**: Tự động hóa cao cho task nhỏ
+- **Guarded Mode**: Xác minh trước cho task phức tạp
+
 ---
-description: 
-globs: 
-alwaysApply: true
+
+## Chế độ 1: Simple Mode (Tự động hóa cao)
+
+### ✅ Được phép khi:
+
+- Thêm/sửa UI components, props, state
+- Gọi API đơn giản (CRUD cơ bản)
+- Refactor nhỏ: đổi tên biến, tách hàm, cleanup code
+- Thêm file mới vào đúng folder convention
+- Sửa ≤ 3 file cùng lúc
+- Không thay đổi API contract, database schema, auth logic
+
+### 🛠️ Công cụ được phép:
+
+- `edit_file` - thay đổi nhỏ
+- `search_replace` - file > 2500 dòng
+- `codebase_search` - tìm hiểu context
+- Show code trực tiếp, không cần hỏi trước
+- "Action before explanation" được phép
+
+### 📝 Ví dụ Simple Mode:
+
+```typescript
+// ✅ Thêm prop mới cho component
+interface ButtonProps {
+  variant?: "primary" | "secondary";
+  size?: "sm" | "md" | "lg";
+  // Thêm prop mới
+  loading?: boolean;
+}
+
+// ✅ Refactor nhỏ - tách hàm
+const handleSubmit = async (data: FormData) => {
+  const validatedData = validateFormData(data);
+  await submitToAPI(validatedData);
+};
+
+// ✅ Thêm helper function
+export const formatDate = (date: Date): string => {
+  return new Intl.DateTimeFormat("vi-VN").format(date);
+};
+```
+
+### ⚠️ Lưu ý:
+
+- Tuân theo `commands.mdc` nếu dùng `run_terminal_cmd`
+- Không gọi nhiều command liên tiếp
+- Không gọi `npm run build/test` trừ khi fix lỗi
+- Tự động chạy lint/format sau edit
+
 ---
-# Workflow Automation
 
-## Tool Usage Principles (Priority Order)
+## Chế độ 2: Guarded Mode (Xác minh trước)
 
-### 1. **Code First, Commands Last**
-- **ALWAYS prioritize code edits** over terminal commands
-- Only run commands when absolutely necessary for the task
-- Avoid "status checking" commands unless specifically requested
-- Don't run `ls`, `cat`, or similar unless user asks for file exploration
+### 🚨 Phải chuyển sang Guarded Mode khi:
 
-### 2. **Action Before Explanation** 
-- Implement the solution immediately, explain after if needed
-- Don't ask permission unless there are multiple valid approaches
-- Avoid "Here's what I'll do..." - just do it
-- Show working code, not plans
+- Có > 1 hướng triển khai
+- Thay đổi API routes, database schema, business logic, auth
+- Thêm thư viện mới
+- Thay đổi folder structure (di chuyển/đổi tên folder)
+- Thay đổi `.env`, config hệ thống
+- Sửa > 3 file cùng lúc
+- Ảnh hưởng performance đáng kể
 
-### 3. **Minimize Terminal Noise**
-- Avoid commands that don't produce actionable output
-- Don't run build/test commands unless fixing specific errors
-- Skip "verification" commands (git status, npm list, etc.)
-- Use file reading tools instead of cat/grep when possible
+### 🔒 Quy tắc Guarded Mode:
 
-### 4. **Smart Tool Selection**
-- Use `edit_file` for most changes
-- Use `search_replace` for large files (>2500 lines)
-- Use `codebase_search` to understand, not `run_terminal_cmd`
-- Prefer file tools over terminal exploration
+- **KHÔNG được code ngay**
+- Phải phân tích yêu cầu bằng text-only
+- Chờ xác nhận người dùng trước khi code
+- **KHÔNG dùng bất kỳ tool nào** (edit_file, search_replace, terminal)
 
-## Code Generation
-- Use Cursor AI features effectively:
-  - Tab completion for boilerplate
-  - Generate tests from implementation
-  - Auto-fix linting errors
-  - Generate types from API responses
+### 📋 Template phân tích:
 
-## Snippets & Templates
-- Component template:
-  ```tsx
-  // comp.tsx snippet
-  interface ${1:Component}Props {
-    ${2:// props}
-  }
+```
+**Phân tích yêu cầu:**
+- Hiện tại: [mô tả state hiện tại]
+- Đề xuất: [giải pháp cụ thể]
+- Tác động: [file nào, logic nào bị ảnh hưởng]
+- Alternative: [các option khác nếu có]
 
-  export const ${1:Component}: React.FC<${1:Component}Props> = (props) => {
-    return (
-      <div className="${3:}">
-        ${0}
-      </div>
-    )
-  }
-  ```
+**Implementation Plan:**
+1. Frontend: [thay đổi gì]
+2. Backend: [thay đổi gì]
+3. Database: [nếu có]
+4. Breaking changes: [nếu có]
 
-- Hook template:
-  ```tsx
-  // hook.ts snippet
-  export const use${1:Hook} = (${2:params}) => {
-    const [state, setState] = useState(${3:initial})
-    
-    useEffect(() => {
-      ${4:// effect}
-    }, [${5:deps}])
-    
-    return { state }
-  }
-  ```
+**Xác nhận:** Bạn có đồng ý với approach này không?
+```
 
-## Development Scripts
-- Package.json scripts:
-  ```json
-  {
-    "scripts": {
-      "dev": "next dev",
-      "build": "next build",
-      "start": "next start",
-      "lint": "next lint",
-      "lint:fix": "next lint --fix",
-      "type-check": "tsc --noEmit",
-      "format": "prettier --write .",
-      "test": "jest",
-      "test:watch": "jest --watch",
-      "analyze": "ANALYZE=true next build",
-      "prepare": "husky install"
-    }
-  }
-  ```
+### 📝 Ví dụ Guarded Mode:
 
-## VS Code Settings
-- Recommended workspace settings:
-  ```json
-  {
-    "editor.formatOnSave": true,
-    "editor.codeActionsOnSave": {
-      "source.fixAll.eslint": true,
-      "source.organizeImports": true
-    },
-    "typescript.preferences.importModuleSpecifier": "relative",
-    "tailwindCSS.experimental.classRegex": [
-      ["cn\\(([^)]*)\\)", "[\"'`](mdc:[^/"'`]*).*?[\"'`]"]
-    ]
-  }
-  ```
+```typescript
+// ❌ KHÔNG được tự động thêm thư viện mới
+npm install @tanstack/react-query
 
-## Git Workflow
-- Branch naming: `feature/`, `fix/`, `chore/`
-- Commit conventions:
-  - `feat:` new features
-  - `fix:` bug fixes
-  - `docs:` documentation
-  - `style:` formatting
-  - `refactor:` code restructuring
-  - `test:` adding tests
-  - `chore:` maintenance
+// ❌ KHÔNG được tự động thay đổi API contract
+// Cũ: GET /api/users
+// Mới: GET /api/users?page=1&limit=10
 
-## Debugging Tools
-- Debug configurations cho VS Code:
-  ```json
-  {
-    "type": "node",
-    "request": "launch",
-    "name": "Next.js Debug",
-    "skipFiles": ["<node_internals>/**"],
-    "program": "${workspaceFolder}/node_modules/.bin/next",
-    "args": ["dev"],
-    "env": {
-      "NODE_OPTIONS": "--inspect"
-    }
-  }
-  ```
+// ❌ KHÔNG được tự động thay đổi auth logic
+const isAuthenticated = (user: User) => {
+  // Thay đổi logic authentication
+}
+```
 
-## Performance Monitoring
-- Local performance profiling:
-  ```tsx
-  // utils/performance.ts
-  export const measurePerformance = (name: string) => {
-    if (process.env.NODE_ENV === 'development') {
-      performance.mark(`${name}-start`)
-      
-      return () => {
-        performance.mark(`${name}-end`)
-        performance.measure(name, `${name}-start`, `${name}-end`)
-        const measure = performance.getEntriesByName(name)[0]
-        console.log(`${name}: ${measure.duration.toFixed(2)}ms`)
-      }
-    }
-    return () => {}
-  }
-  ```
+---
 
-## Documentation Generation
-- Auto-generate API docs from comments
-- Component documentation với Storybook
-- Maintain CHANGELOG.md automatically
-- README templates for new features
+## Luật sử dụng công cụ
 
+### Ưu tiên thứ tự:
+
+1. `edit_file` - thay đổi nhỏ, file < 2500 dòng
+2. `search_replace` - file > 2500 dòng, thay đổi pattern
+3. `codebase_search` - tìm hiểu context, chưa rõ codebase
+4. `run_terminal_cmd` - chỉ khi không còn lựa chọn khác
+
+### Checklist trước khi dùng tool:
+
+- [ ] Đây là task đơn giản hay phức tạp?
+- [ ] Có cần xác nhận từ người dùng không?
+- [ ] Có thể gây ảnh hưởng đến hệ thống không?
+- [ ] Output từ lệnh trước đã được xử lý chưa?
+
+---
+
+## Rollback Strategy
+
+### Nếu Simple Mode gây lỗi:
+
+```bash
+# Undo nhanh
+git checkout -- <file_path>
+git restore <file_path>
+
+# Hoặc revert commit
+git revert HEAD
+
+# Chạy lint/format để fix
+npm run lint --fix
+npm run format
+```
+
+### Best Practices:
+
+- Commit thường xuyên trước khi thao tác tự động
+- Test nhanh sau mỗi thay đổi
+- Có backup/checkpoint trước khi thay đổi lớn
+
+---
+
+## Success Metrics
+
+✅ **Thành công khi:**
+
+- Task nhỏ được xử lý nhanh, đúng
+- Task phức tạp luôn được xác minh trước
+- Không có thay đổi bất ngờ gây lỗi
+- Cursor không phá vỡ logic tổng thể
+- Code quality được maintain (lint/format tự động)
+
+Cursor không phá vỡ logic tổng thể vì hành động vội vàng

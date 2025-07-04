@@ -10,6 +10,17 @@
         "--context",
         "ide-assistant"
       ]
+    },
+    "interactive-feedback-mcp": {
+      "command": "C:/Users/tmtmt/.local/bin/uv.exe",
+      "args": [
+        "--directory",
+        "D:/Workspace/interactive-feedback-mcp",
+        "run",
+        "server.py"
+      ],
+      "timeout": 600,
+      "autoApprove": ["interactive_feedback"]
     }
   }
 }

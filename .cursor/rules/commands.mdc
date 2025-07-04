@@ -1,0 +1,115 @@
+# Terminal Commands Rules
+
+## Mục tiêu
+
+Quy định rõ khi nào được gọi `run_terminal_cmd`, tránh spam terminal hoặc chạy lệnh không cần thiết.
+
+## Triết lý
+
+**"Code first, commands last"** - Ưu tiên `edit_file`, `read_file`, `codebase_search`. Chỉ dùng terminal khi không còn cách nào khác.
+
+---
+
+## 🚫 Lệnh KHÔNG được gọi (trừ khi user yêu cầu rõ ràng)
+
+```bash
+ls                    # Dùng file_search thay thế
+pwd                   # Chỉ khi cần xác minh path
+cat file.txt          # Dùng read_file thay thế
+echo "text"           # Không cần thiết
+cd ...                # Chỉ khi biết chắc path
+git status            # Chỉ khi user hỏi
+npm list              # Chỉ khi debug dependency
+npm run build         # Chỉ khi fix lỗi build
+npm test              # Chỉ khi fix lỗi test
+```
+
+### ⚠️ Lưu ý:
+
+- Nếu cần kiểm tra thư mục → chỉ gọi `ls && pwd` **một lần duy nhất** rồi phân tích kết quả
+
+---
+
+## ✅ Khi nào ĐƯỢC phép gọi terminal
+
+- Biết chắc đang ở đúng thư mục
+- File/script đích thực sự tồn tại
+- Không thể thay thế bằng file operation
+- Đã phân tích kết quả từ lệnh trước
+- Được user yêu cầu rõ ràng
+
+---
+
+## 🔄 Trình tự BẮT BUỘC trước khi gọi terminal
+
+### Bước 1: Xác minh context
+
+```bash
+run_terminal_cmd("ls && pwd")
+```
+
+### Bước 2: Phân tích output
+
+- Đọc kết quả, xác minh path đúng
+- Kiểm tra có file cần thiết không
+
+### Bước 3: Quyết định tiếp theo
+
+- Nếu chưa chắc → hỏi user
+- Nếu hợp lệ → gọi lệnh thứ hai
+
+### Bước 4: Luôn phân tích output
+
+- Không gọi liên tiếp 2+ lệnh mà không phân tích
+
+---
+
+## 🛠️ Ưu tiên xử lý khi làm task
+
+1. **`edit_file`** - sửa code trực tiếp
+2. **`read_file`** hoặc **`codebase_search`** - hiểu ngữ cảnh
+3. **`npm install`** - nếu thêm package
+4. **`run_terminal_cmd`** - chỉ khi không còn lựa chọn khác
+
+---
+
+## 📝 Ví dụ hợp lệ
+
+### User: "Fix lỗi build"
+
+**AI thực hiện:**
+
+1. `run_terminal_cmd("ls && pwd")`
+2. Đọc output: thấy đang ở thư mục frontend, có package.json
+3. `run_terminal_cmd("npm run build")`
+4. Đọc log → thấy lỗi rõ ràng → `edit_file` để sửa lỗi
+
+---
+
+## ⚠️ Hành vi NGUY HIỂM cần tránh
+
+- Gọi `cd` không biết path
+- Gọi `build/test` mà chưa sửa gì
+- Gọi `echo`, `ls`, `git status` chỉ để "xem chơi"
+- Gọi 3–4 lệnh liên tiếp mà không phân tích gì cả
+
+**Nếu phát hiện hành vi này → AI phải dừng lại và hỏi lại người dùng**
+
+---
+
+## ✅ Checklist trước khi chạy lệnh
+
+- [ ] Mình có chắc đang ở đúng thư mục chưa?
+- [ ] Script/file cần dùng có thực sự tồn tại không?
+- [ ] Có thay thế bằng thao tác file được không?
+- [ ] Đã xử lý xong kết quả từ lệnh trước chưa?
+- [ ] Có đang giải quyết đúng task của user không?
+
+---
+
+## 🎯 Kết quả mong muốn
+
+- **Không còn lệnh spam terminal**
+- **Mỗi lần gọi lệnh đều có lý do rõ ràng**
+- **Cursor không phá hỏng project do chạy sai**
+- **Ưu tiên sửa code trực tiếp thay vì gọi terminal**

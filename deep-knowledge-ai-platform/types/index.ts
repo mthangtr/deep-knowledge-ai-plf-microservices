@@ -141,13 +141,18 @@ export interface MindMapNode {
 // Thêm types cho MindMap component mới
 export interface MindMapNodeData {
   id: string;
+  topic_id: string;
+  parent_id: string | null; // ✅ Thêm field này
   title: string;
   description: string;
   prompt_sample?: string; // Prompt mẫu khi user click vào node
-  is_chat_enabled: boolean; // Có cho phép chat với node này không
+  is_chat_enabled?: boolean; // Có cho phép chat với node này không
   level: number;
-  requires: string[]; // các node phải học trước
-  next: string[]; // các node gợi ý học tiếp
+  position_x?: number; // Vị trí X trong mindmap
+  position_y?: number; // Vị trí Y trong mindmap
+  requires?: string[]; // các node phải học trước
+  next?: string[]; // các node gợi ý học tiếp
+  created_at?: string; // Thời gian tạo
 }
 
 export interface NodeModalData {

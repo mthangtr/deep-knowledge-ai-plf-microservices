@@ -19,7 +19,8 @@ import {
     Trash2,
     ArrowLeft,
     Save,
-    Loader2
+    Loader2,
+    Target
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -62,7 +63,7 @@ export function NotesPanel({
         createNote,
         updateNote,
         saving: hookSaving
-    } = useLearningNotes(selectedNodeId || selectedTopic?.id);
+    } = useLearningNotes(selectedNodeId); // Only fetch notes for specific nodes, not topic fallback
 
     // Sync local state with props
     useEffect(() => {
@@ -339,7 +340,13 @@ export function NotesPanel({
                         {renderNotesList()}
                     </TabsContent>
                     <TabsContent value="section_notes" className="flex-1">
-                        {renderNotesList()}
+                        {selectedNodeId ? renderNotesList() : (
+                            <div className="flex flex-col items-center justify-center h-full p-6 text-muted-foreground">
+                                <Target className="h-12 w-12 mb-3 opacity-50" />
+                                <h3 className="text-base font-medium mb-2">Chọn một node cụ thể</h3>
+                                <p className="text-center text-sm">Chọn một phần học cụ thể trong cây kiến thức để xem ghi chú của phần đó</p>
+                            </div>
+                        )}
                     </TabsContent>
                 </Tabs>
             </ScrollArea>

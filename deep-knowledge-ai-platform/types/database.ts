@@ -18,19 +18,20 @@ export interface LearningTopic {
 export interface TreeNode {
   id: string;
   topic_id: string;
+  parent_id: string | null; // ✅ THÊM: ID của node cha, null nếu là root
   title: string; // "JSX Basics", "Props & State"
   description: string;
   prompt_sample?: string; // Prompt mẫu khi user click vào node
-  is_chat_enabled: boolean; // Có cho phép chat với node này không (nodes chung chung = false)
-  requires: string[]; // Array các node_id phải học trước
-  next: string[]; // Array các node_id gợi ý học tiếp
+  is_chat_enabled?: boolean; // Có cho phép chat với node này không (nodes chung chung = false)
+  requires?: string[]; // Array các node_id phải học trước
+  next?: string[]; // Array các node_id gợi ý học tiếp
   level: number; // Cấp độ trong cây (0 = root, 1 = level 1...)
-  position_x: number; // Vị trí X trong mindmap
-  position_y: number; // Vị trí Y trong mindmap
-  is_completed: boolean; // User đã hoàn thành node này chưa
+  position_x?: number; // Vị trí X trong mindmap
+  position_y?: number; // Vị trí Y trong mindmap
+  is_completed?: boolean; // User đã hoàn thành node này chưa
   completed_at?: string; // Thời gian hoàn thành
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 export interface LearningChat {

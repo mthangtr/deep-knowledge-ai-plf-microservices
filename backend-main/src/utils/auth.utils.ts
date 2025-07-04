@@ -24,12 +24,29 @@ export const getAuthenticatedUser = async (
 ): Promise<User | null> => {
   const authHeader = req.headers.authorization;
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  let token: string | null = null;
+
+  // Try Authorization header first
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.split(" ")[1];
+  }
+  // Fallback to cookie
+  else if (req.headers.cookie) {
+    const cookies = req.headers.cookie.split(";");
+    const jwtCookie = cookies.find((cookie) =>
+      cookie.trim().startsWith("jwt_token=")
+    );
+    if (jwtCookie) {
+      token = jwtCookie.split("=")[1];
+    }
+  }
+
+  if (!token) {
     return null;
   }
 
-  const token = authHeader.split(" ")[1];
-  return verifyToken(token);
+  const user = verifyToken(token);
+  return user;
 };
 
 export const validateTopicOwnership = async (
@@ -58,6 +75,10 @@ export const validateNodeOwnership = async (
     throw new Error("Supabase admin client is required for this operation.");
   }
 
+  console.log(
+    `[DEBUG] validateNodeOwnership: Looking for node_id: ${nodeId} for user: ${userId}`
+  );
+
   const { data: node, error } = await supabaseAdmin
     .from("tree_nodes")
     .select("topic_id")
@@ -65,8 +86,33 @@ export const validateNodeOwnership = async (
     .single();
 
   if (error || !node) {
+    console.log(
+      `[DEBUG] validateNodeOwnership: Node not found. Error:`,
+      error?.message
+    );
+    console.log(
+      `[DEBUG] validateNodeOwnership: Checking if ${nodeId} might be a topic_id instead...`
+    );
+
+    // Check if the provided ID might actually be a topic_id
+    const { data: topic, error: topicError } = await supabaseAdmin
+      .from("learning_topics")
+      .select("id")
+      .eq("id", nodeId)
+      .single();
+
+    if (!topicError && topic) {
+      console.log(
+        `[DEBUG] validateNodeOwnership: FOUND! ${nodeId} is actually a topic_id, not a node_id`
+      );
+    }
+
     return false; // Node does not exist
   }
+
+  console.log(
+    `[DEBUG] validateNodeOwnership: Found node with topic_id: ${node.topic_id}`
+  );
 
   // Now, check if the user owns the topic.
   return validateTopicOwnership(node.topic_id, userId);
@@ -154,7 +200,24 @@ export const validateSessionOwnership = async (
     .single();
 
   if (error || !data) {
+    console.warn(
+      `[validateSessionOwnership] Không tìm thấy session hoặc lỗi DB`,
+      { sessionId, userId, error }
+    );
     return false; // Session does not exist
+  }
+
+  if (data.user_id !== userId) {
+    console.warn(`[validateSessionOwnership] user_id mismatch`, {
+      sessionId,
+      userId,
+      sessionUserId: data.user_id,
+    });
+  } else {
+    console.info(`[validateSessionOwnership] user_id khớp`, {
+      sessionId,
+      userId,
+    });
   }
 
   return data.user_id === userId;

@@ -1,11 +1,11 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: false
 ---
+
 - Migrations with version control
 - Database indexes for performance
 - Connection pooling
 - Read replicas cho scaling
 - Soft delete instead of hard delete
-

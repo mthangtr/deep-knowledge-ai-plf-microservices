@@ -28,6 +28,9 @@ export function useLearningNodes(topicId?: string) {
       try {
         const response = await learningService.getTopicNodes(currentTopicId);
 
+        console.log("=== useLearningNodes HOOK DEBUG ===");
+        console.log("Response from service:", response);
+
         if (response.error) {
           setState((prev) => ({
             ...prev,
@@ -36,6 +39,16 @@ export function useLearningNodes(topicId?: string) {
           }));
           return;
         }
+
+        console.log("Received nodes data:", response.data);
+        console.log(
+          "Sample nodes with parent_id:",
+          response.data?.slice(0, 3).map((n: any) => ({
+            id: n.id?.substring(0, 8),
+            title: n.title?.substring(0, 20),
+            parent_id: n.parent_id,
+          }))
+        );
 
         setState((prev) => ({
           ...prev,
@@ -191,7 +204,7 @@ export function useLearningNodes(topicId?: string) {
   // Get child nodes of a node
   const getChildNodes = useCallback(
     (nodeId: string) => {
-      return state.nodes.filter((node) => node.requires.includes(nodeId));
+      return state.nodes.filter((node) => node.requires?.includes(nodeId));
     },
     [state.nodes]
   );
@@ -200,7 +213,7 @@ export function useLearningNodes(topicId?: string) {
   const getPrerequisiteNodes = useCallback(
     (nodeId: string) => {
       const targetNode = findNodeById(nodeId);
-      if (!targetNode) return [];
+      if (!targetNode || !targetNode.requires) return [];
 
       return targetNode.requires
         .map((reqId) => findNodeById(reqId))

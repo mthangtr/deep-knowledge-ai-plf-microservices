@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MindMapNode, MindMapNodeData } from '@/types';
+import { TreeNode } from '@/types/database';
 import { TreeView } from '@/components/learning/TreeView';
 import {
     Brain,
@@ -22,16 +22,16 @@ import { cn } from '@/lib/utils';
 interface MindMapModalProps {
     isOpen: boolean;
     onClose: () => void;
-    data: MindMapNodeData[];
+    data: TreeNode[];
     topicTitle: string;
-    onNodeSelect?: (node: MindMapNodeData) => void;
+    onNodeSelect?: (node: TreeNode) => void;
 }
 
 export function MindMapModal({ isOpen, onClose, data, topicTitle, onNodeSelect }: MindMapModalProps) {
 
     const displayTreeData = data.length > 0 ? data : [];
 
-    const handleNodeClick = (node: MindMapNodeData) => {
+    const handleNodeClick = (node: TreeNode) => {
         if (onNodeSelect) {
             onNodeSelect(node);
             onClose(); // Đóng modal sau khi chọn node

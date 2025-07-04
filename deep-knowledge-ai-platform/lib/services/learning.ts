@@ -30,6 +30,12 @@ class LearningService {
     // Get JWT token from sessionStorage, fallback to cookie
     let token = sessionStorage.getItem("jwt_token");
 
+    console.log(
+      `[DEBUG] getHeaders: Token from sessionStorage = ${
+        token ? token.substring(0, 20) + "..." : "Not found"
+      }`
+    );
+
     // Fallback to cookie if sessionStorage is not available
     if (!token && typeof document !== "undefined") {
       const cookies = document.cookie.split(";");
@@ -37,9 +43,15 @@ class LearningService {
         cookie.trim().startsWith("jwt_token=")
       );
       token = jwtCookie ? jwtCookie.split("=")[1] : null;
+      console.log(
+        `[DEBUG] getHeaders: Token from cookie = ${
+          token ? token.substring(0, 20) + "..." : "Not found"
+        }`
+      );
     }
 
     const headers = getAuthHeaders(token || undefined);
+    console.log(`[DEBUG] getHeaders: Final headers = `, headers);
 
     return headers;
   }
@@ -120,10 +132,30 @@ class LearningService {
   // Tree Nodes API
   async getTopicNodes(topicId: string): Promise<ApiResponse<TreeNode[]>> {
     try {
-      const response = await fetch(API_ENDPOINTS.learning.nodes(topicId), {
+      // Gọi API lấy topic + nodes, chỉ lấy phần nodes
+      const response = await fetch(API_ENDPOINTS.learning.topic(topicId), {
         headers: await this.getHeaders(),
       });
-      return await response.json();
+      const result = await response.json();
+
+      console.log("=== FRONTEND FETCH DEBUG ===");
+      console.log("Request URL:", API_ENDPOINTS.learning.topic(topicId));
+      console.log("Raw response:", result);
+
+      if (result.nodes) {
+        console.log("Extracted nodes:", result.nodes);
+        console.log(
+          "Sample node parent_id values:",
+          result.nodes.slice(0, 3).map((n: any) => ({
+            id: n.id?.substring(0, 8),
+            title: n.title?.substring(0, 20),
+            parent_id: n.parent_id,
+          }))
+        );
+        return { data: result.nodes };
+      }
+
+      return result;
     } catch (error) {
       return { error: "Lỗi kết nối mạng" };
     }
@@ -217,34 +249,6 @@ class LearningService {
     } catch (error) {
       return { error: "Lỗi kết nối mạng" };
     }
-  }
-
-  // Import tree data - alias for createTopicWithTree for backward compatibility
-  async importTreeData(data: TreeData): Promise<ApiResponse<any>> {
-    // Convert TreeNodeInput[] to TreeNode[] format
-    const convertedNodes: TreeNode[] = data.tree.map((node) => ({
-      id: node.temp_id || node.id || "",
-      topic_id: "", // Will be set by API
-      title: node.title,
-      description: node.description,
-      prompt_sample: node.prompt_sample,
-      is_chat_enabled: node.is_chat_enabled ?? false,
-      requires: node.requires || [],
-      next: node.next || [],
-      level: node.level || 0,
-      position_x: node.position_x || 0,
-      position_y: node.position_y || 0,
-      is_completed: false,
-      created_at: "",
-      updated_at: "",
-    }));
-
-    const treeData = {
-      title: "Generated Learning Tree",
-      description: "AI generated learning tree",
-      tree: convertedNodes,
-    };
-    return this.createTopicWithTree(treeData);
   }
 
   // Chat API - Updated for topic-level and node-level chat

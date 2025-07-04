@@ -1,9 +1,4 @@
 ---
-description: 
-globs: 
-alwaysApply: true
----
----
 description: API & server development rules for route handlers and backend logic
 alwaysApply: true
 globs: ["**/route.ts", "**/api/**/*.ts"]
@@ -12,6 +7,7 @@ globs: ["**/route.ts", "**/api/**/*.ts"]
 # API & Server Rules
 
 ## Route Handler Pattern
+
 - Use App Router `route.ts` for API endpoints
 - Standard HTTP methods:
   ```ts
@@ -21,6 +17,47 @@ globs: ["**/route.ts", "**/api/**/*.ts"]
   export async function DELETE(request: Request) {}
   ```
 
+### 📝 Ví dụ thực tế:
+
+````ts
+// app/api/users/route.ts
+import { NextResponse } from 'next/server'
+import { z } from 'zod'
+
+const userSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  age: z.number().min(18)
+})
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json()
+    const validated = userSchema.parse(body)
+
+    // Business logic here
+    const user = await createUser(validated)
+
+    return NextResponse.json({
+      success: true,
+      data: user,
+      meta: { timestamp: new Date().toISOString() }
+    })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, error: "Validation failed", details: error.errors },
+        { status: 400 }
+      )
+    }
+
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}
+
 ## Input Validation
 - **Never trust client input** — validate everything
 - Use Zod for schema validation:
@@ -29,45 +66,51 @@ globs: ["**/route.ts", "**/api/**/*.ts"]
     email: z.string().email(),
     password: z.string().min(8)
   })
-  
+
   const body = await request.json()
   const validated = schema.parse(body) // throws if invalid
-  ```
+````
 
 ## Response Format
+
 - Consistent response structure:
   ```ts
   type ApiResponse<T> = {
-    success: boolean
-    data?: T
-    error?: string
+    success: boolean;
+    data?: T;
+    error?: string;
     meta?: {
-      page?: number
-      total?: number
-      timestamp: string
-    }
-  }
+      page?: number;
+      total?: number;
+      timestamp: string;
+    };
+  };
   ```
 - Use proper HTTP status codes
 - Include request ID for tracking
 
 ## Security & Rate Limiting
+
 - Implement rate limiting với Upstash Redis:
+
   ```ts
-  import { Ratelimit } from "@upstash/ratelimit"
-  import { Redis } from "@upstash/redis"
-  
+  import { Ratelimit } from "@upstash/ratelimit";
+  import { Redis } from "@upstash/redis";
+
   const ratelimit = new Ratelimit({
     redis: Redis.fromEnv(),
     limiter: Ratelimit.slidingWindow(10, "10 s"),
-  })
+  });
   ```
+
 - CORS configuration
 - Authentication middleware
 - Request sanitization
 
 ## Error Handling
+
 - Centralized error handler:
+
   ```ts
   try {
     // API logic
@@ -76,18 +119,19 @@ globs: ["**/route.ts", "**/api/**/*.ts"]
       return NextResponse.json(
         { success: false, error: "Validation failed", details: error.errors },
         { status: 400 }
-      )
+      );
     }
-    
-    logger.error("API Error", error)
+
+    logger.error("API Error", error);
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 }
-    )
+    );
   }
   ```
 
 ## Performance & Monitoring
+
 - Request/Response logging với correlation IDs
 - OpenAPI/Swagger documentation
 - Health check endpoints (`/api/health`)
@@ -95,6 +139,7 @@ globs: ["**/route.ts", "**/api/**/*.ts"]
 - Database query monitoring
 
 ## Background Jobs
+
 - Use queues for heavy operations:
   - Bull for Redis-based queues
   - Agenda for MongoDB
@@ -103,6 +148,14 @@ globs: ["**/route.ts", "**/api/**/*.ts"]
 - Dead letter queues for failed jobs
 
 ## External APIs
+
+- Timeout strategy (default 30s)
+- Retry với exponential backoff
+- Circuit breaker pattern
+- Cache responses where appropriate
+
+## External APIs
+
 - Timeout strategy (default 30s)
 - Retry với exponential backoff
 - Circuit breaker pattern

@@ -9,39 +9,82 @@ alwaysApply: true
 globs: ["**/*.ts", "**/*.tsx"]
 ---
 
-# TypeScript Best Practices
+Tên rule: typescript-best.mdc
+Áp dụng: toàn bộ .ts, .tsx
 
-## Type Safety Rules
-- **NEVER use `any`**. Use `unknown` or `TODO: type` placeholder instead
-- Prefer `interface` over `type` for component props
-- Use branded types for domain entities:
-  ```ts
-  type UserId = string & { __brand: "UserId" }
-  type OrderId = string & { __brand: "OrderId" }
-  ```
+Mục tiêu:
+Áp dụng TypeScript một cách thực tiễn, an toàn và đồng nhất. Không quá cực đoan. Giữ được type safety nhưng không gây nặng nề cho logic code hàng ngày.
 
-## Validation
-- Use **Zod** or **Yup** to validate all external inputs (forms, APIs)
-- Infer types from Zod schemas instead of duplicating:
-  ```ts
-  const userSchema = z.object({ name: z.string() })
-  type User = z.infer<typeof userSchema>
-  ```
+Quy tắc type:
 
-## Modern Patterns
-- **NO enums**. Use union string literals + object maps:
-  ```ts
-  const Status = { ACTIVE: 'active', INACTIVE: 'inactive' } as const
-  type Status = typeof Status[keyof typeof Status]
-  ```
-- Use `as const` for literals to enforce readonly types
-- Use template literal types for dynamic object keys
-- Use generic constraints: `<T extends string>`
+Không dùng any. Nếu chưa rõ → unknown hoặc TODO: type
 
-## Utility Types
-- Master TypeScript utilities: `Pick`, `Omit`, `Partial`, `Required`, `Exclude`, `NonNullable`
-- Avoid deeply nested types beyond 3 levels — extract to named types
-- Declare module types explicitly for third-party packages
+Ưu tiên interface cho component props
+
+Ưu tiên type cho data-layer (DTO, API response)
+
+Với ID hoặc định danh → dùng branded types:
+type UserId = string & { __brand: "UserId" }
+
+Validation:
+
+Ưu tiên dùng Zod để validate các input từ user (form) và external API
+
+Không bắt buộc dùng Zod cho logic nội bộ hoặc gọi API đã kiểm soát
+
+Nên dùng z.infer để tự động hóa type từ schema, nhưng không bắt buộc nếu chỉ dùng 1 lần
+
+Enum:
+
+Không dùng enum
+
+Dùng object literal với as const + union type:
+const Status = { ACTIVE: 'active', INACTIVE: 'inactive' } as const
+type Status = typeof Status[keyof typeof Status]
+
+Optional props:
+
+Không dùng ? nếu không có default hoặc fallback
+
+Nếu bắt buộc dùng ? → luôn viết rõ fallback trong component logic
+
+TSConfig flags:
+
+Bắt buộc bật trong tsconfig.json:
+
+strict: true
+
+noImplicitAny: true
+
+strictNullChecks: true
+
+exactOptionalPropertyTypes: true
+
+Type chia sẻ:
+
+Ưu tiên dùng type chung cho server/client khi có thể (z.infer hoặc dto.ts)
+
+Chỉ tách ClientType và ServerType khi cần che field, hoặc khác biệt rõ
+
+Nếu tách → phải có chú thích rõ: field nào dùng ở đâu
+
+Naming:
+
+camelCase cho biến và function
+
+PascalCase cho type và component
+
+UPPER_SNAKE_CASE cho hằng số
+
+Tên biến nên có tiền tố: is*, has*, get*, set*, on*, handle*
+
+Utility types:
+
+Ưu tiên dùng các utility: Pick, Omit, Partial, Required, Exclude
+
+Tránh lồng type quá sâu → nên tách riêng, đặt tên rõ ràng
+
+Khi dùng thư viện ngoài → nên định nghĩa lại type nếu không rõ
 
 ## TSConfig Requirements
 - Enable in `tsconfig.json`:
@@ -54,11 +97,3 @@ globs: ["**/*.ts", "**/*.tsx"]
 - Variable names should have clear prefixes: `is`, `has`, `on`, `handle`, `get`, `set`
 - Use PascalCase for types/interfaces, camelCase for variables/functions
 - Use UPPER_SNAKE_CASE for constants
-
-
-
-
-
-
-
-

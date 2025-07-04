@@ -20,10 +20,16 @@ export function useLearningNotes(nodeId?: string) {
   // Fetch notes based on current node
   const fetchNotes = useCallback(async () => {
     if (!nodeId) {
+      console.log(
+        "[DEBUG] useLearningNotes: No nodeId provided, skipping fetch"
+      );
       setState((prev) => ({ ...prev, notes: [], loading: false }));
       return;
     }
 
+    console.log(
+      `[DEBUG] useLearningNotes: Fetching notes for nodeId: ${nodeId}`
+    );
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {

@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MindMapNodeData } from '@/types';
+import type { TreeNode } from '@/types/database';
 import {
     ChevronRight,
     ChevronDown,
@@ -21,12 +21,12 @@ import {
 import { cn } from '@/lib/utils';
 
 interface TreeNodeProps {
-    node: MindMapNodeData;
+    node: TreeNode;
     level: number;
-    allNodes: MindMapNodeData[];
+    allNodes: TreeNode[];
     expandedNodes: Set<string>;
     onToggle: (nodeId: string) => void;
-    onNodeClick: (node: MindMapNodeData) => void;
+    onNodeClick: (node: TreeNode) => void;
     parentPath?: string[];
 }
 
@@ -39,7 +39,9 @@ function TreeNode({
     onNodeClick,
     parentPath = []
 }: TreeNodeProps) {
-    // Correctly find child nodes based on parent_id relationship
+    console.log(`TreeNode render: ${node.title.substring(0, 20)} - level: ${node.level}, passed level: ${level}`);
+
+    // Find child nodes based on parent_id relationship
     const childNodes = allNodes.filter(childNode => childNode.parent_id === node.id);
 
     const hasChildren = childNodes.length > 0;
@@ -70,8 +72,10 @@ function TreeNode({
         }
     };
 
-    const getIndentationClass = (nodeLevel: number): string => {
-        return `pl-${Math.min(nodeLevel * 8, 32)}`;
+    const getIndentationStyle = (nodeLevel: number): React.CSSProperties => {
+        return {
+            paddingLeft: `${Math.min(nodeLevel * 32, 128)}px`
+        };
     };
 
     return (
@@ -80,13 +84,13 @@ function TreeNode({
                 className={cn(
                     "group relative flex items-center gap-3 py-3 px-4 border-l-4 cursor-pointer transition-all duration-200",
                     "hover:bg-accent hover:shadow-sm rounded-r-md",
-                    getLevelStyle(level),
-                    getIndentationClass(level)
+                    getLevelStyle(node.level)
                 )}
                 onClick={handleNodeClick}
                 style={{
-                    marginLeft: `${level * 24}px`,
-                    borderLeftWidth: '4px'
+                    marginLeft: `${node.level * 24}px`,
+                    borderLeftWidth: '4px',
+                    ...getIndentationStyle(node.level)
                 }}
             >
                 {/* Tree Toggle Button */}
@@ -112,11 +116,11 @@ function TreeNode({
 
                 {/* Level Icon */}
                 <div className="flex-shrink-0">
-                    {level === 0 && <div className="w-2 h-2 rounded-full bg-blue-500" />}
-                    {level === 1 && <div className="w-2 h-2 rounded-full bg-green-500" />}
-                    {level === 2 && <div className="w-2 h-2 rounded-full bg-yellow-500" />}
-                    {level === 3 && <div className="w-2 h-2 rounded-full bg-purple-500" />}
-                    {level > 3 && <div className="w-2 h-2 rounded-full bg-gray-500" />}
+                    {node.level === 0 && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                    {node.level === 1 && <div className="w-2 h-2 rounded-full bg-green-500" />}
+                    {node.level === 2 && <div className="w-2 h-2 rounded-full bg-yellow-500" />}
+                    {node.level === 3 && <div className="w-2 h-2 rounded-full bg-purple-500" />}
+                    {node.level > 3 && <div className="w-2 h-2 rounded-full bg-gray-500" />}
                 </div>
 
                 <div className="flex-1 min-w-0">
@@ -124,10 +128,10 @@ function TreeNode({
                         <BookOpen className="h-4 w-4 flex-shrink-0" />
                         <h3 className={cn(
                             "font-medium truncate",
-                            level === 0 && "text-base font-bold",
-                            level === 1 && "text-sm font-semibold",
-                            level === 2 && "text-sm",
-                            level >= 3 && "text-xs"
+                            node.level === 0 && "text-base font-bold",
+                            node.level === 1 && "text-sm font-semibold",
+                            node.level === 2 && "text-sm",
+                            node.level >= 3 && "text-xs"
                         )}>
                             {node.title}
                         </h3>
@@ -135,29 +139,29 @@ function TreeNode({
                             variant="outline"
                             className={cn(
                                 "text-xs flex-shrink-0",
-                                level === 0 && "bg-blue-100 text-blue-800 border-blue-300",
-                                level === 1 && "bg-green-100 text-green-800 border-green-300",
-                                level === 2 && "bg-yellow-100 text-yellow-800 border-yellow-300",
-                                level >= 3 && "bg-purple-100 text-purple-800 border-purple-300"
+                                node.level === 0 && "bg-blue-100 text-blue-800 border-blue-300",
+                                node.level === 1 && "bg-green-100 text-green-800 border-green-300",
+                                node.level === 2 && "bg-yellow-100 text-yellow-800 border-yellow-300",
+                                node.level >= 3 && "bg-purple-100 text-purple-800 border-purple-300"
                             )}
                         >
-                            L{level}
+                            L{node.level}
                         </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
                         {node.description}
                     </p>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        {node.requires.length > 0 && (
+                        {(node.requires?.length || 0) > 0 && (
                             <div className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
-                                <span>{node.requires.length} phụ thuộc</span>
+                                <span>{node.requires?.length || 0} phụ thuộc</span>
                             </div>
                         )}
-                        {node.next.length > 0 && (
+                        {(node.next?.length || 0) > 0 && (
                             <div className="flex items-center gap-1">
                                 <Target className="h-3 w-3" />
-                                <span>{node.next.length} gợi ý</span>
+                                <span>{node.next?.length || 0} gợi ý</span>
                             </div>
                         )}
                         {hasChildren && (
@@ -187,7 +191,7 @@ function TreeNode({
                     {/* Connecting line for children */}
                     <div
                         className="absolute left-6 top-0 bottom-0 w-px bg-border opacity-50"
-                        style={{ marginLeft: `${level * 24}px` }}
+                        style={{ marginLeft: `${node.level * 24}px` }}
                     />
                     <div className="space-y-1">
                         {childNodes
@@ -197,11 +201,11 @@ function TreeNode({
                                     {/* Branch connector */}
                                     <div
                                         className="absolute left-6 top-6 w-4 h-px bg-border opacity-50"
-                                        style={{ marginLeft: `${level * 24}px` }}
+                                        style={{ marginLeft: `${node.level * 24}px` }}
                                     />
                                     <TreeNode
                                         node={childNode}
-                                        level={level + 1}
+                                        level={childNode.level}
                                         allNodes={allNodes}
                                         expandedNodes={expandedNodes}
                                         onToggle={onToggle}
@@ -218,21 +222,30 @@ function TreeNode({
 }
 
 export interface TreeViewProps {
-    nodes: MindMapNodeData[];
+    nodes: TreeNode[];
     className?: string;
-    onNodeClick?: (node: MindMapNodeData) => void;
+    onNodeClick?: (node: TreeNode) => void;
 }
 
 export function TreeView({ nodes, className, onNodeClick }: TreeViewProps) {
-    console.log("--- TreeView Data Received ---", nodes);
+    console.log("=== TreeView RENDER ===");
+    console.log("Total nodes:", nodes.length);
+    console.log("Nodes data:", nodes.map(n => ({
+        id: n.id.substring(0, 8),
+        title: n.title.substring(0, 30),
+        level: n.level,
+        parent_id: n.parent_id ? n.parent_id.substring(0, 8) : null
+    })));
+
     // Auto-expand top level nodes (level 0 and 1) by default
     const getDefaultExpandedNodes = () => {
         const topLevelNodes = nodes.filter(node => node.level <= 1);
+        console.log("Top level nodes for expansion:", topLevelNodes.map(n => ({ id: n.id.substring(0, 8), level: n.level })));
         return new Set(topLevelNodes.map(node => node.id));
     };
 
     const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => getDefaultExpandedNodes());
-    const [selectedNode, setSelectedNode] = useState<MindMapNodeData | null>(null);
+    const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
     const [showModal, setShowModal] = useState(false);
 
     // Update expanded nodes when nodes change
@@ -240,13 +253,19 @@ export function TreeView({ nodes, className, onNodeClick }: TreeViewProps) {
         setExpandedNodes(getDefaultExpandedNodes());
     }, [nodes]);
 
-    // Correctly get root nodes: those with no parent_id
+    // Get root nodes: those with no parent_id
     const rootNodes = nodes.filter(node => !node.parent_id)
         .sort((a, b) => {
             // Sort by level first, then by title
             if (a.level !== b.level) return a.level - b.level;
             return a.title.localeCompare(b.title);
         });
+
+    console.log("Root nodes:", rootNodes.map(n => ({
+        id: n.id.substring(0, 8),
+        title: n.title.substring(0, 30),
+        level: n.level
+    })));
 
     const handleToggle = useCallback((nodeId: string) => {
         setExpandedNodes(prev => {
@@ -260,7 +279,7 @@ export function TreeView({ nodes, className, onNodeClick }: TreeViewProps) {
         });
     }, []);
 
-    const handleNodeClick = useCallback((node: MindMapNodeData) => {
+    const handleNodeClick = useCallback((node: TreeNode) => {
         if (onNodeClick) {
             onNodeClick(node);
         } else {
@@ -289,6 +308,7 @@ export function TreeView({ nodes, className, onNodeClick }: TreeViewProps) {
             const indent = '  '.repeat(level);
             let text = `${indent}- ${node.title}\\n`;
 
+            // Find children by parent_id
             const children = nodes.filter(n => n.parent_id === nodeId);
             children.forEach(child => {
                 text += generateTreeText(child.id, level + 1, new Set(visited));
@@ -331,7 +351,7 @@ export function TreeView({ nodes, className, onNodeClick }: TreeViewProps) {
                         <TreeNode
                             key={root.id}
                             node={root}
-                            level={0}
+                            level={root.level}
                             allNodes={nodes}
                             expandedNodes={expandedNodes}
                             onToggle={handleToggle}
@@ -356,11 +376,11 @@ export function TreeView({ nodes, className, onNodeClick }: TreeViewProps) {
                             </div>
                             <div className="flex gap-2 flex-wrap">
                                 <Badge variant="outline">Level {selectedNode.level}</Badge>
-                                {selectedNode.requires.length > 0 && (
-                                    <Badge variant="secondary">Phụ thuộc: {selectedNode.requires.length}</Badge>
+                                {(selectedNode.requires?.length || 0) > 0 && (
+                                    <Badge variant="secondary">Phụ thuộc: {selectedNode.requires?.length || 0}</Badge>
                                 )}
-                                {selectedNode.next.length > 0 && (
-                                    <Badge variant="secondary">Gợi ý: {selectedNode.next.length}</Badge>
+                                {(selectedNode.next?.length || 0) > 0 && (
+                                    <Badge variant="secondary">Gợi ý: {selectedNode.next?.length || 0}</Badge>
                                 )}
                             </div>
                         </div>

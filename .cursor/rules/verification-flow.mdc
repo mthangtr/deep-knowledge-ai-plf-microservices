@@ -1,7 +1,7 @@
 ---
-description:
-globs:
-alwaysApply: false
+description: 
+globs: 
+alwaysApply: true
 ---
 # Verification & Implementation Flow
 
@@ -35,6 +35,7 @@ alwaysApply: false
 3. Database changes: [if any]
 4. Breaking changes: [if any]
 
+Nếu nghi ngờ → luôn default sang xác minh trước
 **Xác nhận:** Bạn có đồng ý với approach này không?
 ```
 

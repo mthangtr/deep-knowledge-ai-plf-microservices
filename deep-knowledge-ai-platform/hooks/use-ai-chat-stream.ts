@@ -1,9 +1,8 @@
 import { useState, useCallback } from "react";
 import { API_ENDPOINTS, getAuthHeaders } from "@/lib/config";
 import { ChatMessage } from "@/types";
-import { useAIChat } from "@/components/providers/ai-chat-provider";
 import { v4 as uuidv4 } from "uuid";
-
+import { useLearningSession } from "../components/providers/chat-session-provider";
 // The backend now sends different types of events.
 // We only really care about 'user_message' and raw content from the AI stream.
 interface StreamingResponse {
@@ -24,7 +23,7 @@ interface UseAIChatStreamCallbacks {
 export function useAIChatStream() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { sessionId, setSessionId } = useAIChat();
+  const { sessionId, setSessionId } = useLearningSession();
 
   const getValidSessionId = useCallback(
     async (
