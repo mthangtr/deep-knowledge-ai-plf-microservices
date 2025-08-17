@@ -1,8 +1,8 @@
 # Environment files with sensitive data
-.env
+*.env
+*.env.local
 
 # But keep the example file
-!.env.example
 
 # OS generated files
 .DS_Store

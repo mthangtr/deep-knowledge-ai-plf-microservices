@@ -13,8 +13,6 @@ import {
     ArrowRight,
     Clock,
     Target,
-    CheckCircle,
-    X,
     Copy,
     Download
 } from 'lucide-react';
@@ -43,6 +41,8 @@ function TreeNode({
 
     // Find child nodes based on parent_id relationship
     const childNodes = allNodes.filter(childNode => childNode.parent_id === node.id);
+
+
 
     const hasChildren = childNodes.length > 0;
     const isExpanded = expandedNodes.has(node.id);
@@ -196,7 +196,7 @@ function TreeNode({
                     <div className="space-y-1">
                         {childNodes
                             .sort((a, b) => a.title.localeCompare(b.title))
-                            .map((childNode, index, array) => (
+                            .map((childNode) => (
                                 <div key={childNode.id} className="relative">
                                     {/* Branch connector */}
                                     <div
@@ -237,12 +237,15 @@ export function TreeView({ nodes, className, onNodeClick }: TreeViewProps) {
         parent_id: n.parent_id ? n.parent_id.substring(0, 8) : null
     })));
 
+    // Quick verification
+    console.log("TreeView - Total nodes:", nodes.length, "Root nodes:", nodes.filter(node => node.parent_id === null || node.parent_id === undefined || node.parent_id === "").length);
+
     // Auto-expand top level nodes (level 0 and 1) by default
-    const getDefaultExpandedNodes = () => {
+    const getDefaultExpandedNodes = useCallback(() => {
         const topLevelNodes = nodes.filter(node => node.level <= 1);
         console.log("Top level nodes for expansion:", topLevelNodes.map(n => ({ id: n.id.substring(0, 8), level: n.level })));
         return new Set(topLevelNodes.map(node => node.id));
-    };
+    }, [nodes]);
 
     const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => getDefaultExpandedNodes());
     const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
@@ -251,10 +254,10 @@ export function TreeView({ nodes, className, onNodeClick }: TreeViewProps) {
     // Update expanded nodes when nodes change
     useEffect(() => {
         setExpandedNodes(getDefaultExpandedNodes());
-    }, [nodes]);
+    }, [nodes, getDefaultExpandedNodes]);
 
-    // Get root nodes: those with no parent_id
-    const rootNodes = nodes.filter(node => !node.parent_id)
+    // Get root nodes: those with no parent_id (handle both null and undefined)
+    const rootNodes = nodes.filter(node => node.parent_id === null || node.parent_id === undefined || node.parent_id === "")
         .sort((a, b) => {
             // Sort by level first, then by title
             if (a.level !== b.level) return a.level - b.level;

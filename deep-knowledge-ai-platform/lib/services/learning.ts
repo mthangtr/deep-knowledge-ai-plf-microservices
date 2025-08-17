@@ -140,18 +140,60 @@ class LearningService {
 
       console.log("=== FRONTEND FETCH DEBUG ===");
       console.log("Request URL:", API_ENDPOINTS.learning.topic(topicId));
-      console.log("Raw response:", result);
+      console.log("Response status:", response.status);
+      console.log("Response headers:", response.headers);
+      
+      // 🔍 DETAILED DEBUG: Raw response analysis
+      console.log("Raw result type:", typeof result);
+      console.log("Raw result keys:", Object.keys(result || {}));
+      console.log("Nodes field exists:", !!result.nodes);
+      console.log("Nodes type:", typeof result.nodes);
+      console.log("Nodes is array:", Array.isArray(result.nodes));
+      console.log("Nodes length:", result.nodes?.length);
 
       if (result.nodes) {
-        console.log("Extracted nodes:", result.nodes);
-        console.log(
-          "Sample node parent_id values:",
-          result.nodes.slice(0, 3).map((n: any) => ({
+        // 🔍 DETAILED DEBUG: Node structure analysis
+        console.log("First raw node:", JSON.stringify(result.nodes[0], null, 2));
+        
+        // Check specific levels
+        const nodesByLevel = {
+          level0: result.nodes.filter((n: any) => n.level === 0).slice(0, 2),
+          level1: result.nodes.filter((n: any) => n.level === 1).slice(0, 2),
+          level2: result.nodes.filter((n: any) => n.level === 2).slice(0, 2),
+        };
+        
+        console.log("🔍 FRONTEND nodes by level:", {
+          level0Count: result.nodes.filter((n: any) => n.level === 0).length,
+          level1Count: result.nodes.filter((n: any) => n.level === 1).length,
+          level2Count: result.nodes.filter((n: any) => n.level === 2).length,
+          
+          level0Samples: nodesByLevel.level0.map((n: any) => ({
             id: n.id?.substring(0, 8),
             title: n.title?.substring(0, 20),
             parent_id: n.parent_id,
+            parent_id_type: typeof n.parent_id,
+            level: n.level
+          })),
+          
+          level1Samples: nodesByLevel.level1.map((n: any) => ({
+            id: n.id?.substring(0, 8),
+            title: n.title?.substring(0, 20),
+            parent_id: n.parent_id,
+            parent_id_type: typeof n.parent_id,
+            level: n.level
+          })),
+          
+          level2Samples: nodesByLevel.level2.map((n: any) => ({
+            id: n.id?.substring(0, 8),
+            title: n.title?.substring(0, 20),
+            parent_id: n.parent_id,
+            parent_id_type: typeof n.parent_id,
+            level: n.level
           }))
-        );
+        });
+
+
+
         return { data: result.nodes };
       }
 

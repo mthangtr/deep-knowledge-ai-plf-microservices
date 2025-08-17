@@ -158,44 +158,147 @@ router.get("/:id", async (req, res) => {
       .eq("topic_id", topicId)
       .order("level", { ascending: true });
 
-    console.log(`[DEBUG] [GET /api/learning/:id] Nodes query result:`, {
-      nodesCount: nodes?.length || 0,
-      nodesError: nodesError?.message,
-      firstNode: nodes?.[0],
+    // 🔍 DEEP DEBUG: Direct SQL query test
+    const { data: sqlTestNodes, error: sqlError } = await supabaseAdmin
+      .from("tree_nodes")
+      .select("id, parent_id, title, level")
+      .eq("topic_id", topicId)
+      .not("parent_id", "is", null)
+      .limit(5);
+
+    console.log(`[🔍 DEEP DEBUG] SQL test - nodes with parent_id NOT NULL:`, {
+      count: sqlTestNodes?.length || 0,
+      error: sqlError?.message,
+      samples: sqlTestNodes?.map((n) => ({
+        id: n.id.substring(0, 8),
+        parent_id: n.parent_id?.substring(0, 8),
+        title: n.title.substring(0, 20),
+        level: n.level,
+      })),
     });
 
-    // Log chi tiết để kiểm tra parent_id
-    console.log(
-      `[DEBUG] All nodes data from DB:`,
-      nodes?.map((n) => ({
-        id: n.id.substring(0, 8),
-        title: n.title.substring(0, 20),
-        parent_id: n.parent_id ? n.parent_id.substring(0, 8) : null,
-        level: n.level,
-      }))
-    );
+    console.log(`[🔍 DEEP DEBUG] RAW SUPABASE RESPONSE:`, {
+      nodesCount: nodes?.length || 0,
+      error: nodesError?.message,
+      rawResponseType: typeof nodes,
+      isArray: Array.isArray(nodes),
+    });
+
+    // 🔍 DEEP DEBUG: Log nodes by level from Supabase
+    if (nodes && nodes.length > 0) {
+      const nodesByLevel = {
+        level0: nodes.filter((n) => n.level === 0).slice(0, 3),
+        level1: nodes.filter((n) => n.level === 1).slice(0, 3),
+        level2: nodes.filter((n) => n.level === 2).slice(0, 3),
+      };
+
+      console.log(`[🔍 DEEP DEBUG] Nodes by level from Supabase:`, {
+        totalNodes: nodes.length,
+        level0Count: nodes.filter((n) => n.level === 0).length,
+        level1Count: nodes.filter((n) => n.level === 1).length,
+        level2Count: nodes.filter((n) => n.level === 2).length,
+
+        level0Samples: nodesByLevel.level0.map((n) => ({
+          id: n.id?.substring(0, 8),
+          title: n.title?.substring(0, 20),
+          parent_id: n.parent_id,
+          level: n.level,
+        })),
+
+        level1Samples: nodesByLevel.level1.map((n) => ({
+          id: n.id?.substring(0, 8),
+          title: n.title?.substring(0, 20),
+          parent_id: n.parent_id?.substring(0, 8),
+          level: n.level,
+        })),
+
+        level2Samples: nodesByLevel.level2.map((n) => ({
+          id: n.id?.substring(0, 8),
+          title: n.title?.substring(0, 20),
+          parent_id: n.parent_id?.substring(0, 8),
+          level: n.level,
+        })),
+      });
+    }
+
+    // ✅ Logs cleaned up - using only DEEP DEBUG above
 
     if (nodesError) {
       console.error("Lỗi lấy nodes:", nodesError);
     }
 
-    // Debug response structure before sending
-    console.log(`[DEBUG] Final response structure:`, {
-      topic: !!topic,
-      nodesLength: nodes?.length || 0,
-      sampleNodeStructure: nodes?.[0] ? Object.keys(nodes[0]) : [],
-      sampleNode: nodes?.[0],
-    });
+    // ✅ Logs cleaned up - using only DEEP DEBUG above
 
     // Disable caching for this endpoint
     res.set("Cache-Control", "no-cache, no-store, must-revalidate");
     res.set("Pragma", "no-cache");
     res.set("Expires", "0");
 
-    return res.json({
+    // 🔍 DEEP DEBUG: Process nodes (if any transformation happens)
+    const processedNodes = nodes || [];
+
+    console.log(
+      `[🔍 DEEP DEBUG] After processing (should be same):`,
+      processedNodes.slice(0, 3).map((n) => ({
+        id: n.id?.substring(0, 8),
+        title: n.title?.substring(0, 20),
+        parent_id: n.parent_id,
+        parent_id_type: typeof n.parent_id,
+        parent_id_strict_null: n.parent_id === null,
+      }))
+    );
+
+    // 🔍 DEEP DEBUG: Final response object
+    const responseData = {
       topic,
-      nodes: nodes || [],
+      nodes: processedNodes,
+    };
+
+    console.log(`[🔍 DEEP DEBUG] Final response object:`, {
+      topicId: responseData.topic.id,
+      nodesCount: responseData.nodes.length,
+      firstNodeParentId: responseData.nodes[0]?.parent_id,
+      firstNodeParentIdType: typeof responseData.nodes[0]?.parent_id,
     });
+
+    // 🔍 DEEP DEBUG: JSON.stringify test
+    const jsonString = JSON.stringify(responseData.nodes[0]);
+    console.log(`[🔍 DEEP DEBUG] JSON.stringify first node:`, jsonString);
+
+    // 🔍 DEEP DEBUG: JSON.parse test
+    const parsedBack = JSON.parse(jsonString);
+    console.log(`[🔍 DEEP DEBUG] JSON.parse back:`, {
+      parent_id: parsedBack.parent_id,
+      parent_id_type: typeof parsedBack.parent_id,
+    });
+
+    // 🚨 SIMPLE DEBUG: Check what we're actually sending
+    console.log("=== FINAL BACKEND RESPONSE CHECK ===");
+    console.log("Response nodes count:", responseData.nodes.length);
+    console.log(
+      "First 3 nodes parent_id check:",
+      responseData.nodes.slice(0, 3).map((n) => ({
+        id: n.id.substring(0, 8),
+        level: n.level,
+        parent_id: n.parent_id,
+        parent_id_substring: n.parent_id ? n.parent_id.substring(0, 8) : "NULL",
+      }))
+    );
+
+    // Level 1 check
+    const level1Nodes = responseData.nodes
+      .filter((n) => n.level === 1)
+      .slice(0, 3);
+    console.log(
+      "Level 1 nodes parent_id:",
+      level1Nodes.map((n) => ({
+        id: n.id.substring(0, 8),
+        parent_id: n.parent_id,
+        parent_id_substring: n.parent_id ? n.parent_id.substring(0, 8) : "NULL",
+      }))
+    );
+
+    return res.json(responseData);
   } catch (error) {
     console.error("Lỗi server:", error);
     return res.status(500).json({

@@ -44,6 +44,14 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
       });
     }
 
+    // DEBUG: Log input tree data
+    console.log(`[DEBUG] [TREE CREATION] Input tree data:`, tree.slice(0, 3).map((n: any) => ({
+      temp_id: n.temp_id || n.id,
+      parent_id: n.parent_id,
+      title: n.title?.substring(0, 30),
+      level: n.level
+    })));
+
     // Tạo mapping temp_id → real UUID
     const tempIdMap = new Map<string, string>();
     tree.forEach((node: any) => {
@@ -53,16 +61,31 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
       }
     });
 
+    // DEBUG: Log temp_id mapping
+    console.log(`[DEBUG] [TREE CREATION] TempId mapping:`, Array.from(tempIdMap.entries()).slice(0, 5).map(([temp, real]) => ({
+      temp_id: temp,
+      real_id: real.substring(0, 8)
+    })));
+
     // Tạo tree nodes với real UUIDs
     const nodes = tree.map((node: any) => {
       const tempId = node.temp_id || node.id;
       const realId = tempIdMap.get(tempId) || randomUUID();
 
+      // DEBUG: Log parent_id mapping process
+      console.log(`[DEBUG] [PARENT_ID MAPPING] Node: ${node.title?.substring(0, 20)}`);
+      console.log(`[DEBUG] [PARENT_ID MAPPING] - Input parent_id: ${node.parent_id}`);
+      console.log(`[DEBUG] [PARENT_ID MAPPING] - Has parent_id: ${!!node.parent_id}`);
+      if (node.parent_id) {
+        console.log(`[DEBUG] [PARENT_ID MAPPING] - TempMap has parent: ${tempIdMap.has(node.parent_id)}`);
+        console.log(`[DEBUG] [PARENT_ID MAPPING] - Mapped parent_id: ${tempIdMap.get(node.parent_id)?.substring(0, 8)}`);
+      }
+
       const parentId = node.parent_id
         ? tempIdMap.get(node.parent_id) || null
         : null;
 
-      return {
+      const finalNode = {
         id: realId,
         topic_id: createdTopic.id,
         parent_id: parentId,
@@ -76,7 +99,16 @@ router.post("/", authenticate, async (req: AuthRequest, res) => {
         position_y: node.position_y || 0,
         is_completed: false, // Default value, progress is tracked elsewhere
       };
+
+      console.log(`[DEBUG] [FINAL NODE] ${finalNode.title.substring(0, 20)} - parent_id: ${finalNode.parent_id?.substring(0, 8) || 'null'}, level: ${finalNode.level}`);
+      
+      return finalNode;
     });
+
+    // DEBUG: Summary of nodes before database insert
+    console.log(`[DEBUG] [NODES SUMMARY] Total nodes: ${nodes.length}`);
+    console.log(`[DEBUG] [NODES SUMMARY] Root nodes: ${nodes.filter(n => !n.parent_id).length}`);
+    console.log(`[DEBUG] [NODES SUMMARY] Child nodes: ${nodes.filter(n => n.parent_id).length}`);
 
     const { data: createdNodes, error: nodesError } = await supabaseAdmin
       .from("tree_nodes")
